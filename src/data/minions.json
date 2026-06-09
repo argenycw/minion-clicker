@@ -1,0 +1,538 @@
+[
+  {
+    "id": "weak-melee-01",
+    "type": "melee",
+    "name": "Scout",
+    "description": "Melee. A swift scout that darts in and out, striking with a hidden blade.",
+    "appearance": {
+      "base": {
+        "body": "´ー`",
+        "leftHand": "ง",
+        "rightHand": "〆"
+      },
+      "attack": {
+        "body": "`Д´",
+        "leftHand": "ง",
+        "rightHand": "〆━"
+      }
+    },
+    "visual": {
+      "background": "#e1fdff"
+    },
+    "attributes": {
+      "hp": 45,
+      "attack": 8,
+      "defense": 0,
+      "price": 50,
+      "range": 50,
+      "speed": 160,
+      "attackSpeed": 1.25
+    },
+    "tier": "weak"
+  },
+  {
+    "id": "weak-range-01",
+    "type": "ranged",
+    "name": "Pout Archer",
+    "description": "Ranged. Fires little annoyed spark darts.",
+    "appearance": {
+      "base": {
+        "body": "˘･з･"
+      },
+      "attack": {
+        "body": "˘･з･",
+        "rightHand": "✧"
+      },
+      "projectile": {
+        "glyph": "✧",
+        "color": "#f0a729",
+        "speed": 560,
+        "radius": 18
+      }
+    },
+    "visual": {
+      "background": "#f5ecc1"
+    },
+    "attributes": {
+      "hp": 60,
+      "attack": 10,
+      "defense": 0,
+      "price": 80,
+      "range": 260,
+      "speed": 98,
+      "attackSpeed": 1.05
+    },
+    "tier": "weak"
+  },
+  {
+    "id": "weak-range-02",
+    "type": "ranged",
+    "name": "Heart Sender",
+    "description": "Ranged. Sends heart projectiles with rude accuracy.",
+    "appearance": {
+      "base": {
+        "body": "*´∀`",
+        "rightHand": "~"
+      },
+      "attack": {
+        "body": "*´∀`",
+        "rightHand": "~"
+      },
+      "projectile": {
+        "glyph": "♥",
+        "color": "#e83f79",
+        "speed": 430,
+        "radius": 22
+      }
+    },
+    "visual": {
+      "background": "#ffe1ee"
+    },
+    "attributes": {
+      "hp": 112,
+      "attack": 14,
+      "defense": 0,
+      "price": 140,
+      "range": 220,
+      "speed": 75,
+      "attackSpeed": 0.6
+    },
+    "tier": "weak"
+  },
+  {
+    "id": "weak-melee-02",
+    "type": "melee",
+    "name": "Hand Guard",
+    "description": "Melee. Turns the final hand into a bash weapon.",
+    "appearance": {
+      "base": {
+        "body": "´∀`",
+        "leftHand": "♥",
+        "rightHand": "人"
+      },
+      "attack": {
+        "body": "｀∀´",
+        "leftHand": "♥",
+        "rightHand": "人!"
+      }
+    },
+    "visual": {
+      "background": "#d9f2e3"
+    },
+    "attributes": {
+      "hp": 100,
+      "attack": 18,
+      "defense": 0,
+      "price": 180,
+      "range": 60,
+      "speed": 86,
+      "attackSpeed": 0.62
+    },
+    "tier": "weak"
+  },
+  {
+    "id": "medium-range-01",
+    "type": "ranged",
+    "name": "Shuriken Ninja",
+    "description": "Ranged. Quick stance, quick throw, quick trouble.",
+    "appearance": {
+      "base": {
+        "body": "¬_¬",
+        "rightHand": "╯"
+      },
+      "attack": {
+        "body": "¬_¬",
+        "rightHand": "╯"
+      },
+      "projectile": {
+        "glyph": "✦",
+        "color": "#5964c8",
+        "speed": 720,
+        "radius": 16
+      }
+    },
+    "visual": {
+      "background": "#7254ba"
+    },
+    "attributes": {
+      "hp": 90,
+      "attack": 16,
+      "defense": 0,
+      "price": 250,
+      "range": 220,
+      "speed": 122,
+      "attackSpeed": 1.63
+    },
+    "tier": "medium"
+  },
+  {
+    "id": "strong-melee-01",
+    "type": "melee",
+    "name": "Power Puncher",
+    "description": "Melee. A determined fighter delivering powerful close-range punches.",
+    "appearance": {
+      "base": {
+        "body": "•̀_•́",
+        "leftHand": "ง",
+        "rightHand": "ง"
+      },
+      "attack": {
+        "body": "`皿´",
+        "leftHand": "ง",
+        "rightHand": "ᕗ"
+      }
+    },
+    "visual": {
+      "background": "#ff7d55"
+    },
+    "attributes": {
+      "hp": 160,
+      "attack": 100,
+      "defense": 0,
+      "price": 400,
+      "range": 55,
+      "speed": 72,
+      "attackSpeed": 0.6
+    },
+    "tier": "strong"
+  },
+  {
+    "id": "strong-range-01",
+    "type": "ranged",
+    "name": "Fire Breather",
+    "description": "Ranged. Unleashes torrents of flame, incinerating foes.",
+    "appearance": {
+      "base": {
+        "body": "`ー´",
+        "leftHand": "(",
+        "rightHand": ")"
+      },
+      "attack": {
+        "body": "`Д´",
+        "leftHand": "ヽ",
+        "rightHand": "ﾉ"
+      },
+      "projectile": {
+        "glyph": "🔥",
+        "color": "#ff4500",
+        "speed": 360,
+        "radius": 28
+      }
+    },
+    "visual": {
+      "background": "#eb791c"
+    },
+    "attributes": {
+      "hp": 144,
+      "attack": 64,
+      "defense": 0,
+      "price": 400,
+      "range": 220,
+      "speed": 100,
+      "attackSpeed": 0.8
+    },
+    "tier": "strong"
+  },
+  {
+    "id": "strong-range-02",
+    "type": "ranged",
+    "name": "Lightning Strike",
+    "description": "Ranged. Calls down bolts of pure electricity to stun and damage enemies.",
+    "appearance": {
+      "base": {
+        "body": "•̀_•́",
+        "leftHand": "⚡︎",
+        "rightHand": "⚡︎"
+      },
+      "attack": {
+        "body": "•̀_•́",
+        "leftHand": "⚡︎",
+        "rightHand": "ﾉ"
+      },
+      "projectile": {
+        "glyph": "⚡︎",
+        "color": "#ffff00",
+        "speed": 900,
+        "radius": 18
+      }
+    },
+    "visual": {
+      "background": "#ffe35a"
+    },
+    "attributes": {
+      "hp": 160,
+      "attack": 40,
+      "defense": 0,
+      "price": 400,
+      "range": 280,
+      "speed": 118,
+      "attackSpeed": 1.2
+    },
+    "tier": "strong"
+  },
+  {
+    "id": "medium-melee-01",
+    "type": "melee",
+    "name": "Uppercut Sprout",
+    "description": "Melee. Crouches, pops up, and punches upward.",
+    "appearance": {
+      "base": {
+        "body": "ง •̀_•́",
+        "rightHand": "ง"
+      },
+      "attack": {
+        "body": "`o´",
+        "rightHand": "ง↑"
+      }
+    },
+    "visual": {
+      "background": "#ffd8c7"
+    },
+    "attributes": {
+      "hp": 74,
+      "attack": 28,
+      "defense": 0,
+      "price": 310,
+      "range": 55,
+      "speed": 112,
+      "attackSpeed": 0.58
+    },
+    "tier": "medium"
+  },
+  {
+    "id": "medium-melee-02",
+    "type": "melee",
+    "name": "Blade Smile",
+    "description": "Melee. Walks in and bonks very sincerely.",
+    "appearance": {
+      "base": {
+        "body": "´ω`",
+        "leftHand": "ง",
+        "rightHand": "ง"
+      },
+      "attack": {
+        "body": "òωó",
+        "leftHand": "ง",
+        "rightHand": "ง"
+      }
+    },
+    "visual": {
+      "background": "#f5d6b8"
+    },
+    "attributes": {
+      "hp": 88,
+      "attack": 34,
+      "defense": 0,
+      "price": 360,
+      "range": 50,
+      "speed": 105,
+      "attackSpeed": 0.5
+    },
+    "tier": "medium"
+  },
+  {
+    "id": "strong-range-03",
+    "type": "ranged",
+    "name": "Orb Keeper",
+    "description": "Ranged. Conjures a calm orb and lets it do the arguing.",
+    "appearance": {
+      "base": {
+        "body": "ー人ー",
+        "leftHand": "ノ",
+        "rightHand": "ノ"
+      },
+      "attack": {
+        "body": "°人°",
+        "leftHand": "ノ",
+        "rightHand": "ノ"
+      },
+      "projectile": {
+        "glyph": "●",
+        "color": "#8a62d6",
+        "speed": 300,
+        "radius": 30
+      }
+    },
+    "visual": {
+      "background": "#cdb6ff"
+    },
+    "attributes": {
+      "hp": 224,
+      "attack": 78,
+      "defense": 0,
+      "price": 620,
+      "range": 280,
+      "speed": 66,
+      "attackSpeed": 0.42
+    },
+    "tier": "strong"
+  },
+  {
+    "id": "strong-range-04",
+    "type": "ranged",
+    "name": "Star Mage",
+    "description": "Ranged. Throws glittering math at fortifications.",
+    "appearance": {
+      "base": {
+        "body": "◕ヮ◕",
+        "leftHand": "ﾉ",
+        "rightHand": "ﾉ*:･ﾟ"
+      },
+      "attack": {
+        "body": "◕ヮ◕",
+        "leftHand": "ﾉ",
+        "rightHand": "ﾉ*:･ﾟ"
+      },
+      "projectile": {
+        "glyph": "✸",
+        "color": "#f0a729",
+        "speed": 520,
+        "radius": 24
+      }
+    },
+    "visual": {
+      "background": "#f26ae2"
+    },
+    "attributes": {
+      "hp": 160,
+      "attack": 120,
+      "defense": 0,
+      "price": 980,
+      "range": 300,
+      "speed": 72,
+      "attackSpeed": 0.25
+    },
+    "tier": "strong"
+  },
+  {
+    "id": "strong-range-05",
+    "type": "ranged",
+    "name": "Sniper Rifle",
+    "description": "Ranged. Head Shots.",
+    "appearance": {
+      "base": {
+        "body": "⇀‸↼‶",
+        "leftHand": "ᕙ",
+        "rightHand": "▄︻┻┳═一"
+      },
+      "attack": {
+        "body": "ಠ_ಠ‶",
+        "leftHand": "ᕙ",
+        "rightHand": "▄︻┻┳═一"
+      },
+      "projectile": {
+        "glyph": "ー",
+        "color": "#30262b",
+        "speed": 1150,
+        "radius": 12
+      }
+    },
+    "visual": {
+      "background": "#676767"
+    },
+    "attributes": {
+      "hp": 130,
+      "attack": 99,
+      "defense": 0,
+      "price": 1400,
+      "range": 500,
+      "speed": 42,
+      "attackSpeed": 0.125
+    },
+    "tier": "strong"
+  },
+  {
+    "id": "weak-worker-01",
+    "type": "worker",
+    "name": "Coin Hummer",
+    "description": "Worker. Generates a trickle of coins.",
+    "appearance": {
+      "base": {
+        "body": "´ ▽ `",
+        "rightHand": "ﾉ"
+      },
+      "work": {
+        "body": "´ ▽ `",
+        "leftHand": "🪙",
+        "rightHand": "ﾉ"
+      }
+    },
+    "visual": {
+      "background": "#fff0bf"
+    },
+    "attributes": {
+      "hp": 50,
+      "attack": 1,
+      "defense": 0,
+      "price": 40,
+      "range": 0,
+      "speed": 70,
+      "attackSpeed": 0.25,
+      "coinsPerSecond": 1
+    },
+    "tier": "weak"
+  },
+  {
+    "id": "medium-worker-01",
+    "type": "worker",
+    "name": "Tea Accountant",
+    "description": "Worker. Turns paperwork into passive income.",
+    "appearance": {
+      "base": {
+        "body": "´･ω･",
+        "rightHand": "_旦"
+      },
+      "work": {
+        "body": "´･ω･",
+        "leftHand": "🧾",
+        "rightHand": "_旦"
+      }
+    },
+    "visual": {
+      "background": "#d7f0c7"
+    },
+    "attributes": {
+      "hp": 50,
+      "attack": 1,
+      "defense": 0,
+      "price": 150,
+      "range": 0,
+      "speed": 62,
+      "attackSpeed": 0.25,
+      "coinsPerSecond": 2
+    },
+    "tier": "medium"
+  },
+  {
+    "id": "strong-worker-01",
+    "type": "worker",
+    "name": "Spark Clerk",
+    "description": "Worker. Expensive, smug, profitable.",
+    "appearance": {
+      "base": {
+        "body": "￣ー￣",
+        "leftHand": "✧",
+        "rightHand": "✧"
+      },
+      "work": {
+        "body": "￣ー￣",
+        "leftHand": "🪙✧",
+        "rightHand": "✧"
+      }
+    },
+    "visual": {
+      "background": "#c9e26d"
+    },
+    "attributes": {
+      "hp": 50,
+      "attack": 2,
+      "defense": 0,
+      "price": 500,
+      "range": 0,
+      "speed": 58,
+      "attackSpeed": 0.25,
+      "coinsPerSecond": 5
+    },
+    "tier": "strong"
+  }
+]

@@ -1,0 +1,496 @@
+[
+  {
+    "id": "easy-01",
+    "name": "Twigkeep",
+    "symbol": "🏰",
+    "x": 1200,
+    "y": 900,
+    "maxHp": 420,
+    "reward": 420,
+    "aggroRadius": 600,
+    "theme": "#d9c08c",
+    "defenders": [
+      {
+        "tier": "weak",
+        "type": "ranged",
+        "dx": -105,
+        "dy": -50
+      },
+      {
+        "tier": "weak",
+        "type": "melee",
+        "dx": 90,
+        "dy": 55
+      }
+    ],
+    "tier": "easy"
+  },
+  {
+    "id": "easy-02",
+    "name": "Paperkeep",
+    "symbol": "🏰",
+    "x": 2400,
+    "y": 1400,
+    "maxHp": 760,
+    "reward": 720,
+    "aggroRadius": 600,
+    "theme": "#d9c08c",
+    "defenders": [
+      {
+        "tier": "weak",
+        "type": "ranged",
+        "dx": -120,
+        "dy": -45
+      },
+      {
+        "tier": "weak",
+        "type": "ranged",
+        "dx": 105,
+        "dy": -80
+      },
+      {
+        "tier": "weak",
+        "type": "melee",
+        "dx": -75,
+        "dy": 95
+      }
+    ],
+    "tier": "easy"
+  },
+  {
+    "id": "medium-01",
+    "name": "The Bandit's Mountain",
+    "symbol": "⛰️",
+    "x": 4600,
+    "y": 2800,
+    "maxHp": 1850,
+    "reward": 2100,
+    "aggroRadius": 700,
+    "theme": "#d8b092",
+    "defenders": [
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": -130,
+        "dy": -70
+      },
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": 110,
+        "dy": 90
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 140,
+        "dy": -80
+      },
+      {
+        "tier": "weak",
+        "type": "melee",
+        "dx": -80,
+        "dy": 120
+      }
+    ],
+    "tier": "medium"
+  },
+  {
+    "id": "medium-02",
+    "name": "Orbspire",
+    "symbol": "🏯",
+    "x": 7300,
+    "y": 3100,
+    "maxHp": 3600,
+    "reward": 4300,
+    "aggroRadius": 780,
+    "theme": "#b8a7e6",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -145,
+        "dy": -90
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 135,
+        "dy": 80
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 0,
+        "dy": -150
+      },
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": -110,
+        "dy": 120
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 150,
+        "dy": -15
+      }
+    ],
+    "tier": "medium"
+  },
+  {
+    "id": "medium-03",
+    "name": "Gilded Keep",
+    "symbol": "🏰",
+    "x": 8500,
+    "y": 5200,
+    "maxHp": 5200,
+    "reward": 6800,
+    "aggroRadius": 800,
+    "theme": "#dfbf5b",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -160,
+        "dy": -100
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 145,
+        "dy": -95
+      },
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": -140,
+        "dy": 110
+      },
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": 120,
+        "dy": 130
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": 165
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 0,
+        "dy": -165
+      }
+    ],
+    "tier": "medium"
+  },
+  {
+    "id": "hard-01",
+    "name": "The City of Nightmare",
+    "symbol": "🏰",
+    "x": 10100,
+    "y": 6400,
+    "maxHp": 7800,
+    "reward": 10500,
+    "aggroRadius": 1000,
+    "theme": "#d8a1cb",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -180,
+        "dy": -130
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 180,
+        "dy": -120
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -170,
+        "dy": 120
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 170,
+        "dy": 120
+      },
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": -70,
+        "dy": 180
+      },
+      {
+        "tier": "medium",
+        "type": "melee",
+        "dx": 70,
+        "dy": 180
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 0,
+        "dy": -205
+      }
+    ],
+    "tier": "hard"
+  },
+  {
+    "id": "hard-02",
+    "name": "Gilded Crown",
+    "symbol": "🏰",
+    "x": 12500,
+    "y": 7800,
+    "maxHp": 9800,
+    "reward": 14200,
+    "aggroRadius": 1080,
+    "theme": "#d6b447",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -210,
+        "dy": -150
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 210,
+        "dy": -150
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": -150,
+        "dy": 110
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 150,
+        "dy": 110
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": -240
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": 210
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -260,
+        "dy": 20
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 260,
+        "dy": 20
+      }
+    ],
+    "tier": "hard"
+  },
+  {
+    "id": "hard-03",
+    "name": "Ember Court",
+    "symbol": "🏰",
+    "x": 17400,
+    "y": 12600,
+    "maxHp": 11200,
+    "reward": 17500,
+    "aggroRadius": 1120,
+    "theme": "#d58b5c",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -250,
+        "dy": -160
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 250,
+        "dy": -160
+      },
+      {
+        "tier": "strong",
+        "type": "melee",
+        "dx": -190,
+        "dy": 180
+      },
+      {
+        "tier": "strong",
+        "type": "melee",
+        "dx": 190,
+        "dy": 180
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": -260
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -310,
+        "dy": 20
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 310,
+        "dy": 20
+      }
+    ],
+    "tier": "hard"
+  },
+  {
+    "id": "hard-04",
+    "name": "Longshot Bastion",
+    "symbol": "🏯",
+    "x": 21000,
+    "y": 14800,
+    "maxHp": 12400,
+    "reward": 19800,
+    "aggroRadius": 1180,
+    "theme": "#9db4d9",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -300,
+        "dy": -190
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 300,
+        "dy": -190
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -220,
+        "dy": 170
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 220,
+        "dy": 170
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": -300
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": -340,
+        "dy": 40
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 340,
+        "dy": 40
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": 250
+      }
+    ],
+    "tier": "hard"
+  },
+  {
+    "id": "hard-05",
+    "name": "Crownspire",
+    "symbol": "🏯",
+    "x": 14600,
+    "y": 10200,
+    "maxHp": 13500,
+    "reward": 22000,
+    "aggroRadius": 1200,
+    "theme": "#c487d9",
+    "defenders": [
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -260,
+        "dy": -180
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 260,
+        "dy": -180
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -190,
+        "dy": 170
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 190,
+        "dy": 170
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": -330,
+        "dy": 20
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 330,
+        "dy": 20
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": -80,
+        "dy": -280
+      },
+      {
+        "tier": "medium",
+        "type": "ranged",
+        "dx": 80,
+        "dy": -280
+      },
+      {
+        "tier": "strong",
+        "type": "ranged",
+        "dx": 0,
+        "dy": 260
+      }
+    ],
+    "tier": "hard"
+  }
+]
