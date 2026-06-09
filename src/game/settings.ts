@@ -37,6 +37,7 @@ export const GAME_SETTINGS = {
     playerBaseHealRadius: 360,
     playerBaseHpPerSecond: 1,
     defaultEnemyCastleHpPerSecond: 1,
+    formationMaxMoveOffset: 80,
   },
   map: {
     gridSize: 80,

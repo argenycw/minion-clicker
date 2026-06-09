@@ -27,6 +27,10 @@ type Fx = CombatEvent & {
 
 const minZoom = 0.25;
 const maxZoom = 2.00;
+const unitBodyHeight = 38;
+const unitBodyFont = 17;
+const unitHandFont = 16;
+const unitHandGap = 7;
 const initialCamera = {
   x: world.spawnPlayer.x - GAME_SETTINGS.map.initialViewportWidth / GAME_SETTINGS.map.initialZoom / 2,
   y: world.spawnPlayer.y - GAME_SETTINGS.map.initialViewportHeight / GAME_SETTINGS.map.initialZoom / 2,
@@ -50,6 +54,7 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
   });
   const keysRef = useRef(new Set<string>());
   const touchPointsRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ distance: number; center: { x: number; y: number } } | undefined>(undefined);
   const fxRef = useRef<Fx[]>([]);
   const pingRef = useRef<Array<{ id: number; born: number; x: number; y: number; kind: string }>>([]);
   const seenEvents = useRef(new Set<number>());
@@ -111,6 +116,9 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
       if (event.pointerType === 'touch') touchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
       const touchPan = event.pointerType === 'touch' && touchPointsRef.current.size >= 2;
       const center = touchPan ? touchCenter(touchPointsRef.current) : { x: event.clientX, y: event.clientY };
+      if (touchPan) {
+        pinchRef.current = { distance: touchDistance(touchPointsRef.current), center };
+      }
       const mode = touchPan ? 'pan' : event.button === 0 ? 'select' : event.button === 1 || event.button === 2 ? 'pan' : 'none';
       dragRef.current = {
         active: true,
@@ -144,17 +152,32 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
       drag.currentY = point.y;
       if (drag.mode === 'pan') {
         canvas.classList.add('is-panning');
-        cameraRef.current = clampCamera({
-          ...cameraRef.current,
-          x: cameraRef.current.x - dx / cameraRef.current.zoom,
-          y: cameraRef.current.y - dy / cameraRef.current.zoom,
-        });
+        if (touchPan) {
+          const distance = touchDistance(touchPointsRef.current);
+          const previous = pinchRef.current ?? { distance, center: point };
+          const before = toWorld(previous.center.x, previous.center.y);
+          const zoom = clamp(cameraRef.current.zoom * (distance / Math.max(1, previous.distance)), minZoom, maxZoom);
+          const rect = canvas.getBoundingClientRect();
+          cameraRef.current = clampCamera({
+            zoom,
+            x: before.x - (point.x - rect.left) / zoom,
+            y: before.y - (point.y - rect.top) / zoom,
+          });
+          pinchRef.current = { distance, center: point };
+        } else {
+          cameraRef.current = clampCamera({
+            ...cameraRef.current,
+            x: cameraRef.current.x - dx / cameraRef.current.zoom,
+            y: cameraRef.current.y - dy / cameraRef.current.zoom,
+          });
+        }
       }
     };
 
     const onPointerUp = (event: PointerEvent) => {
       const drag = dragRef.current;
       if (event.pointerType === 'touch') touchPointsRef.current.delete(event.pointerId);
+      if (touchPointsRef.current.size < 2) pinchRef.current = undefined;
       drag.active = false;
       canvas.classList.remove('is-panning');
       if (drag.mode === 'pan' && drag.moved) return;
@@ -214,6 +237,10 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
       }
       if (hitBase(point.x, point.y)) {
         handlersRef.current.onSelectBase();
+        return;
+      }
+      if (event.pointerType === 'touch' && stateRef.current.selectedUnitIds.length > 0) {
+        handlersRef.current.onCommand(point.x, point.y);
         return;
       }
       handlersRef.current.onClearSelection();
@@ -491,7 +518,7 @@ function drawCastle(ctx: CanvasRenderingContext2D, castle: CastleEntity) {
 
 function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, selected: boolean, now: number) {
   const definition = getUnit(unit.defId);
-  const bob = Math.sin(now / 240 + unit.x * 0.01) * 2;
+  const faceWobble = Math.sin(now / 240 + unit.x * 0.01) * 1.2;
   const isEnemy = unit.team === 'enemy';
   const isAttacking = Boolean(unit.lastAttackAt && now - unit.lastAttackAt < 320);
   const isWorking = definition.kind === 'worker' && definition.coinsPerSecond && Math.sin(now / 360 + unit.x) > 0.58;
@@ -500,38 +527,42 @@ function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, selected: boo
   const leftHand = useAttackHands ? definition.attackLeftHand : isWorking ? definition.workLeftHand ?? definition.leftHand : definition.leftHand;
   const rightHand = useAttackHands ? definition.attackRightHand : isWorking ? definition.workRightHand ?? definition.rightHand : definition.rightHand;
   const bodyWidth = definition.pillWidth;
-  const bodyHeight = 40;
-  const handGap = 10;
 
   ctx.save();
-  ctx.translate(unit.x, unit.y + bob);
+  ctx.translate(unit.x, unit.y);
+  ctx.fillStyle = 'rgba(40, 52, 42, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(0, 22, bodyWidth / 2, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.fillStyle = definition.background;
   ctx.strokeStyle = isEnemy ? '#bb3f4d' : '#4777bd';
   ctx.lineWidth = selected ? 4 : 2;
   ctx.beginPath();
-  ctx.roundRect(-bodyWidth / 2, -bodyHeight / 2, bodyWidth, bodyHeight, 19);
+  ctx.roundRect(-bodyWidth / 2, -unitBodyHeight / 2, bodyWidth, unitBodyHeight, unitBodyHeight / 2);
   ctx.fill();
   ctx.stroke();
 
   ctx.save();
   if (unit.facing === 'left') ctx.scale(-1, 1);
-  ctx.font = '29px "Trebuchet MS", "Segoe UI", sans-serif';
+  ctx.translate(0, faceWobble);
+  ctx.font = `${unitBodyFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#182033';
   ctx.shadowColor = 'rgba(255,255,255,0.85)';
   ctx.shadowBlur = 4;
   ctx.fillText(body, 0, 0);
-  ctx.font = '27px "Trebuchet MS", "Segoe UI", sans-serif';
+  ctx.font = `${unitHandFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
   if (leftHand) {
-    ctx.fillText(leftHand, -bodyWidth / 2 - handGap, 0);
+    ctx.fillText(leftHand, -bodyWidth / 2 - unitHandGap, 0);
   }
   if (rightHand) {
-    ctx.fillText(rightHand, bodyWidth / 2 + handGap, 0);
+    ctx.fillText(rightHand, bodyWidth / 2 + unitHandGap, 0);
   }
   ctx.restore();
 
-  drawHpBar(ctx, -31, 27, 62, 7, unit.hp / unit.maxHp, isEnemy ? '#d94f5f' : '#4777bd');
+  drawHpBar(ctx, -31, 26, 62, 7, unit.hp / unit.maxHp, isEnemy ? '#d94f5f' : '#4777bd');
 
   if (selected) {
     ctx.strokeStyle = 'rgba(244, 178, 63, 0.5)';
@@ -695,8 +726,6 @@ function drawCastleDestroyedEffect(ctx: CanvasRenderingContext2D, effect: Fx, no
 function drawFxKaomoji(ctx: CanvasRenderingContext2D, effect: Fx, x: number, y: number, rotation: number) {
   const body = effect.body ?? effect.glyph;
   const bodyWidth = effect.pillWidth ?? GAME_SETTINGS.ui.defaultMinionPillWidth;
-  const bodyHeight = 40;
-  const handGap = 10;
 
   ctx.save();
   ctx.translate(x, y);
@@ -705,20 +734,20 @@ function drawFxKaomoji(ctx: CanvasRenderingContext2D, effect: Fx, x: number, y: 
   ctx.strokeStyle = effect.team === 'enemy' ? '#bb3f4d' : '#4777bd';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(-bodyWidth / 2, -bodyHeight / 2, bodyWidth, bodyHeight, 19);
+  ctx.roundRect(-bodyWidth / 2, -unitBodyHeight / 2, bodyWidth, unitBodyHeight, unitBodyHeight / 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = '29px "Trebuchet MS", "Segoe UI", sans-serif';
+  ctx.font = `${unitBodyFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#182033';
   ctx.shadowColor = 'rgba(255,255,255,0.85)';
   ctx.shadowBlur = 4;
   ctx.fillText(body, 0, 0);
-  ctx.font = '26px "Trebuchet MS", "Segoe UI", sans-serif';
-  if (effect.leftHand) ctx.fillText(effect.leftHand, -bodyWidth / 2 - handGap, 0);
-  if (effect.rightHand) ctx.fillText(effect.rightHand, bodyWidth / 2 + handGap, 0);
+  ctx.font = `${unitHandFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
+  if (effect.leftHand) ctx.fillText(effect.leftHand, -bodyWidth / 2 - unitHandGap, 0);
+  if (effect.rightHand) ctx.fillText(effect.rightHand, bodyWidth / 2 + unitHandGap, 0);
   ctx.restore();
 }
 
@@ -802,6 +831,12 @@ function touchCenter(points: Map<number, { x: number; y: number }>) {
   }
   const count = Math.max(1, points.size);
   return { x: x / count, y: y / count };
+}
+
+function touchDistance(points: Map<number, { x: number; y: number }>) {
+  const [first, second] = [...points.values()];
+  if (!first || !second) return 1;
+  return Math.hypot(first.x - second.x, first.y - second.y);
 }
 
 function applyKeyboardPan(keys: Set<string>, camera: Camera, deltaSeconds: number) {

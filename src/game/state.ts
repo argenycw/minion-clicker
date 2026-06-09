@@ -19,6 +19,7 @@ export type UnitEntity = {
   homeCastleId?: string;
   targetId?: string;
   moveTarget?: { x: number; y: number };
+  retreating?: boolean;
   attackCooldown: number;
   lastAttackAt?: number;
   guardSlot?: number;
@@ -422,8 +423,10 @@ export const clearSelection = (state: GameState): GameState => ({
 });
 
 export const commandSelected = (state: GameState, x: number, y: number, targetId?: string): GameState => {
-  const selectedPlayerIds = state.selectedUnitIds.filter((id) => state.units.some((unit) => unit.id === id && unit.team === 'player'));
-  if (selectedPlayerIds.length === 0) {
+  const selectedPlayerUnits = state.selectedUnitIds
+    .map((id) => state.units.find((unit) => unit.id === id && unit.team === 'player'))
+    .filter((unit): unit is UnitEntity => Boolean(unit));
+  if (selectedPlayerUnits.length === 0) {
     return {
       ...state,
       selectedUnitId: undefined,
@@ -433,15 +436,18 @@ export const commandSelected = (state: GameState, x: number, y: number, targetId
       ],
     };
   }
+  const selectedPlayerIds = new Set(selectedPlayerUnits.map((unit) => unit.id));
+  const moveTargets = targetId ? new Map<string, { x: number; y: number }>() : getFormationMoveTargets(selectedPlayerUnits, x, y);
   return {
     ...state,
     units: state.units.map((unit) =>
-      selectedPlayerIds.includes(unit.id)
+      selectedPlayerIds.has(unit.id)
         ? {
             ...unit,
-            facing: x < unit.x ? 'left' : 'right',
+            facing: (moveTargets.get(unit.id)?.x ?? x) < unit.x ? 'left' : 'right',
             targetId,
-            moveTarget: targetId ? undefined : { x, y },
+            moveTarget: targetId ? undefined : moveTargets.get(unit.id) ?? { x, y },
+            retreating: targetId ? false : isPlayerUnitInCombat(unit, state.units, state.enemyCastles, state.lastTick),
           }
         : unit,
     ),
@@ -492,7 +498,7 @@ export const tickState = (state: GameState, now: number): GameState => {
       target = units.find((other) => other.id === unit.targetId && other.team !== unit.team);
     }
 
-    if (!target && unit.team === 'player') {
+    if (!target && unit.team === 'player' && !unit.retreating) {
       target = nearestEnemy(unit, units, 'enemy');
       if (target && distance(unit, target) > GAME_SETTINGS.combat.playerAutoTargetRadius) target = undefined;
       if (!target) {
@@ -778,7 +784,7 @@ function moveUnit<T extends { x: number; y: number }>(
   const dx = target.x - unit.x;
   const dy = target.y - unit.y;
   const dist = Math.hypot(dx, dy);
-  if (dist <= stopDistance + 2) return { ...unit, moveTarget: undefined };
+  if (dist <= stopDistance + 2) return { ...unit, moveTarget: undefined, retreating: false };
   const step = Math.min(speed * deltaSeconds, Math.max(0, dist - stopDistance));
   const facing: Facing = dx < 0 ? 'left' : 'right';
   return {
@@ -787,6 +793,42 @@ function moveUnit<T extends { x: number; y: number }>(
     x: unit.x + (dx / dist) * step,
     y: unit.y + (dy / dist) * step,
   };
+}
+
+function getFormationMoveTargets(units: UnitEntity[], x: number, y: number) {
+  if (units.length <= 1) return new Map(units.map((unit) => [unit.id, { x, y }]));
+
+  const center = units.reduce(
+    (point, unit) => ({ x: point.x + unit.x / units.length, y: point.y + unit.y / units.length }),
+    { x: 0, y: 0 },
+  );
+  return new Map(
+    units.map((unit) => {
+      const offset = clampVector(unit.x - center.x, unit.y - center.y, GAME_SETTINGS.combat.formationMaxMoveOffset);
+      return [unit.id, { x: x + offset.x, y: y + offset.y }];
+    }),
+  );
+}
+
+function isPlayerUnitInCombat(unit: UnitEntity, units: UnitEntity[], enemyCastles: CastleEntity[], now: number) {
+  if (unit.team !== 'player' || getUnit(unit.defId).kind !== 'combat') return false;
+  if (unit.targetId) return true;
+  if (unit.lastAttackAt && now - unit.lastAttackAt < 1500) return true;
+  if (units.some((other) => other.team === 'enemy' && other.targetId === unit.id)) return true;
+
+  const definition = getUnit(unit.defId);
+  const attackReach = Math.max(definition.range, 64);
+  if (units.some((other) => other.team === 'enemy' && getUnit(other.defId).kind === 'combat' && distance(unit, other) <= attackReach)) {
+    return true;
+  }
+  return enemyCastles.some((castle) => castle.hp > 0 && distance(unit, castle) <= attackReach);
+}
+
+function clampVector(x: number, y: number, maxLength: number) {
+  const length = Math.hypot(x, y);
+  if (length <= maxLength || length === 0) return { x, y };
+  const scale = maxLength / length;
+  return { x: x * scale, y: y * scale };
 }
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }) {

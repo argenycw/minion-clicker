@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Coins, Crosshair, FlaskConical, Hammer, HandCoins, HeartPulse, PanelRightClose, PanelRightOpen, RotateCcw, Swords, Trophy, Upload, UserMinus, UsersRound, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Coins, Crosshair, FlaskConical, Hammer, HandCoins, HeartPulse, RotateCcw, Swords, Trophy, Upload, UserMinus, UsersRound, X } from 'lucide-react';
 import { Battlefield } from './components/Battlefield';
 import { ShopCard } from './components/ShopCard';
 import {
@@ -395,90 +395,91 @@ export function App() {
         </section>
 
         <button className={`shop-toggle ${shopOpen ? 'drawer-open' : 'drawer-closed'}`} type="button" onClick={() => setShopOpen((open) => !open)} aria-label="Toggle shop">
-          {shopOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
+          {shopOpen ? <ChevronRight size={22} /> : <ChevronLeft size={22} />}
           {shopOpen ? <ChevronDown className="mobile-drawer-icon" size={24} /> : <ChevronUp className="mobile-drawer-icon" size={24} />}
         </button>
 
-        {shopOpen && (
-          <aside className="shop-overlay">
-            <div className="brand-block">
-              <h1>Minion Clicker</h1>
-              <p>SHOP</p>
-            </div>
+        <aside className={`shop-overlay ${shopOpen ? 'drawer-open' : 'drawer-closed'}`} aria-hidden={!shopOpen}>
+          <div className="game-title-block">
+            <h1>Minion Clicker</h1>
+          </div>
 
-            <div className="tabs" role="tablist" aria-label="Shop categories">
-              <button className={shopTab === 'combat' ? 'active' : ''} type="button" onClick={() => setShopTab('combat')}>
-                <Swords size={17} />
-                Combat
-              </button>
-              <button className={shopTab === 'worker' ? 'active' : ''} type="button" onClick={() => setShopTab('worker')}>
-                <Hammer size={17} />
-                Worker
-              </button>
-              <button className={shopTab === 'tech' ? 'active' : ''} type="button" onClick={() => setShopTab('tech')}>
-                <FlaskConical size={17} />
-                Tech
-              </button>
-            </div>
+          <div className="shop-heading-block">
+            <p>Shop</p>
+          </div>
 
-            <section className="shop-panel">
-              {shopTab === 'tech'
-                ? (
-                  <>
-                    {technologies.map((tech) => (
-                      <TechCard
-                        key={tech.id}
-                        tech={tech}
-                        unlocked={state.unlockedTech.includes(tech.id)}
-                        coins={state.coins}
-                        onBuy={(techId) => dispatch({ type: 'buyTech', techId })}
-                      />
-                    ))}
-                    <ImportCard label="Import Tech DLC" onClick={() => techImportRef.current?.click()} />
-                  </>
-                )
-                : (
-                  <>
-                    {(shopTab === 'combat' ? combatMinions : workerMinions).map((unit) => (
-                      <ShopCard
-                        key={unit.id}
-                        unit={unit}
-                        count={getAlivePlayerUnitCount(state, unit.id)}
-                        cost={getScaledCost(unit.id, getAlivePlayerUnitCount(state))}
-                        coins={state.coins}
-                        onBuy={(unitId) => dispatch({ type: 'buy', unitId })}
-                      />
-                    ))}
-                    <ImportCard label={`Import ${shopTab === 'combat' ? 'Combat' : 'Worker'} DLC`} onClick={() => minionImportRef.current?.click()} />
-                  </>
-                )}
-            </section>
-            <input
-              ref={minionImportRef}
-              className="hidden-file-input"
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => {
-                handleImportFile(event.currentTarget.files?.[0], 'minion');
-                event.currentTarget.value = '';
-              }}
-            />
-            <input
-              ref={techImportRef}
-              className="hidden-file-input"
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => {
-                handleImportFile(event.currentTarget.files?.[0], 'tech');
-                event.currentTarget.value = '';
-              }}
-            />
-            <button className="ghost-button" type="button" onClick={handleReset}>
-              <RotateCcw size={16} />
-              Reset run
+          <div className="tabs" role="tablist" aria-label="Shop categories">
+            <button className={shopTab === 'combat' ? 'active' : ''} type="button" onClick={() => setShopTab('combat')}>
+              <Swords size={17} />
+              Combat
             </button>
-          </aside>
-        )}
+            <button className={shopTab === 'worker' ? 'active' : ''} type="button" onClick={() => setShopTab('worker')}>
+              <Hammer size={17} />
+              Worker
+            </button>
+            <button className={shopTab === 'tech' ? 'active' : ''} type="button" onClick={() => setShopTab('tech')}>
+              <FlaskConical size={17} />
+              Tech
+            </button>
+          </div>
+
+          <section className="shop-panel">
+            {shopTab === 'tech'
+              ? (
+                <>
+                  {technologies.map((tech) => (
+                    <TechCard
+                      key={tech.id}
+                      tech={tech}
+                      unlocked={state.unlockedTech.includes(tech.id)}
+                      coins={state.coins}
+                      onBuy={(techId) => dispatch({ type: 'buyTech', techId })}
+                    />
+                  ))}
+                  <ImportCard label="Import Tech DLC" onClick={() => techImportRef.current?.click()} />
+                </>
+              )
+              : (
+                <>
+                  {(shopTab === 'combat' ? combatMinions : workerMinions).map((unit) => (
+                    <ShopCard
+                      key={unit.id}
+                      unit={unit}
+                      count={getAlivePlayerUnitCount(state, unit.id)}
+                      cost={getScaledCost(unit.id, getAlivePlayerUnitCount(state))}
+                      coins={state.coins}
+                      onBuy={(unitId) => dispatch({ type: 'buy', unitId })}
+                    />
+                  ))}
+                  <ImportCard label={`Import ${shopTab === 'combat' ? 'Combat' : 'Worker'} DLC`} onClick={() => minionImportRef.current?.click()} />
+                </>
+              )}
+          </section>
+          <input
+            ref={minionImportRef}
+            className="hidden-file-input"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              handleImportFile(event.currentTarget.files?.[0], 'minion');
+              event.currentTarget.value = '';
+            }}
+          />
+          <input
+            ref={techImportRef}
+            className="hidden-file-input"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              handleImportFile(event.currentTarget.files?.[0], 'tech');
+              event.currentTarget.value = '';
+            }}
+          />
+          <button className="ghost-button" type="button" onClick={handleReset}>
+            <RotateCcw size={16} />
+            Reset run
+          </button>
+        </aside>
 
         {state.wonAt && (
           <section className="victory-overlay" role="dialog" aria-label="Victory">
