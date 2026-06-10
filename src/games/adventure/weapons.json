@@ -1,0 +1,70 @@
+[
+  {
+    "id": "training-fist",
+    "name": "Training Fist",
+    "handGlyph": "ง",
+    "bareHandGlyph": "ง",
+    "kind": "melee",
+    "description": "A quick close-range jab for testing movement and timing.",
+    "damage": 18,
+    "range": 84,
+    "radius": 52,
+    "attackSpeed": 2.4,
+    "color": "#4777bd",
+    "effectGlyph": "💥",
+    "effectSize": 46
+  },
+  {
+    "id": "spark-wand",
+    "name": "Spark Wand",
+    "handGlyph": "╯✧",
+    "bareHandGlyph": "╯",
+    "kind": "projectile",
+    "description": "Fires a small spark toward the cursor.",
+    "damage": 14,
+    "range": 680,
+    "radius": 18,
+    "attackSpeed": 1.35,
+    "projectile": {
+      "glyph": "✧",
+      "speed": 620
+    },
+    "color": "#f0a729",
+    "effectGlyph": "⚡",
+    "effectSize": 40
+  },
+  {
+    "id": "heart-tether",
+    "name": "Heart Tether",
+    "handGlyph": "~♥",
+    "bareHandGlyph": "~",
+    "kind": "projectile",
+    "description": "A slower heavy heart shot with a larger hit radius.",
+    "damage": 28,
+    "range": 520,
+    "radius": 28,
+    "attackSpeed": 0.72,
+    "projectile": {
+      "glyph": "♥",
+      "speed": 420
+    },
+    "color": "#e83f79",
+    "effectGlyph": "💗",
+    "effectSize": 42
+  },
+  {
+    "id": "practice-blade",
+    "name": "Practice Blade",
+    "handGlyph": "〆",
+    "bareHandGlyph": "╯",
+    "kind": "melee",
+    "description": "A wider melee slash for dummy testing.",
+    "damage": 26,
+    "range": 116,
+    "radius": 70,
+    "attackSpeed": 1.1,
+    "color": "#d94f5f",
+    "effectGlyph": "💥",
+    "effectSize": 52
+  }
+]

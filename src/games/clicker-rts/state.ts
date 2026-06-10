@@ -1,5 +1,5 @@
-import { GAME_SETTINGS, WORLD_HEIGHT, WORLD_WIDTH } from './settings';
-import { castleDefinitions, getUnit, terrainProps, unitDefinitions, type CastleDefenderDefinition } from './content';
+import { GAME_SETTINGS, WORLD_HEIGHT, WORLD_WIDTH } from '../../shared/settings';
+import { castleDefinitions, getUnit, terrainProps, unitDefinitions, type CastleDefenderDefinition } from '../../shared/content';
 import { technologies } from './technology';
 
 export type Team = 'player' | 'enemy';

@@ -1,7 +1,8 @@
-import builtInMinions from '../data/minions.json';
-import builtInCastles from '../data/enemy.json';
+import builtInMinions from './data/minions.json';
+import builtInCastles from './data/enemy.json';
 import { GAME_SETTINGS, WORLD_HEIGHT, WORLD_WIDTH } from './settings';
-import type { ContentSource } from './technology';
+
+export type ContentSource = 'built-in' | 'dlc';
 
 export type MinionType = 'melee' | 'ranged' | 'worker';
 export type MinionTier = 'weak' | 'medium' | 'strong';

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
-import { UnitDefinition } from '../game/content';
-import { formatMoney, formatNumber } from '../game/state';
+import { UnitDefinition } from '../../../shared/content';
+import { formatMoney, formatNumber } from '../state';
 
 type Props = {
   unit: UnitDefinition;

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "keen-edge-stone",
+    "name": "Keen Edge Stone",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "Imprints sharper physical force into a weapon.",
+    "damageMultiplier": 1.2
+  },
+  {
+    "id": "quickening-stone",
+    "name": "Quickening Stone",
+    "icon": "◇",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "Lightens the weapon rhythm and improves attack speed.",
+    "attackSpeedMultiplier": 1.18
+  },
+  {
+    "id": "reach-stone",
+    "name": "Reach Stone",
+    "icon": "⬡",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "Extends the effective range of the weapon.",
+    "rangeMultiplier": 1.18
+  },
+  {
+    "id": "scatter-stone",
+    "name": "Scatter Stone",
+    "icon": "✹",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Adds one extra projectile to ranged weapons.",
+    "extraProjectiles": 1
+  },
+  {
+    "id": "impact-stone",
+    "name": "Impact Stone",
+    "icon": "✦",
+    "color": "#ff7d55",
+    "family": "impact",
+    "description": "Expands the hit area around the strike.",
+    "radiusMultiplier": 1.25
+  }
+]

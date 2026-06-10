@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { LocateFixed } from 'lucide-react';
-import { getUnit } from '../game/content';
-import { CastleEntity, CombatEvent, GameState, ProjectileEntity, UnitEntity, world } from '../game/state';
-import { GAME_SETTINGS } from '../game/settings';
+import { getUnit } from '../../../shared/content';
+import { CastleEntity, CombatEvent, GameState, ProjectileEntity, UnitEntity, world } from '../state';
+import { GAME_SETTINGS } from '../../../shared/settings';
 
 type Props = {
   state: GameState;

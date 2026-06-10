@@ -1,6 +1,5 @@
-import builtInTech from '../data/tech.json';
-
-export type ContentSource = 'built-in' | 'dlc';
+import builtInTech from './tech.json';
+import type { ContentSource } from '../../shared/content';
 
 export type TechnologyJson = {
   id: string;

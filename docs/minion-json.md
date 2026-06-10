@@ -1,6 +1,6 @@
 # Minion JSON
 
-Minions are defined in `src/data/minions.json`. Custom minions can use the same shape and be imported in dev mode from the browser console.
+Minions are defined in `src/shared/data/minions.json`. Custom minions can use the same shape and be imported in dev mode from the browser console.
 
 ## Types
 

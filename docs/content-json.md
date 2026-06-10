@@ -1,10 +1,10 @@
 # Content JSON
 
-Built-in content lives in `src/data`:
+Built-in content now lives with either shared game systems or the game that owns it:
 
-- `minions.json`: combat and worker minions.
-- `tech.json`: technology cards.
-- `enemy.json`: enemy castle definitions and their guard layouts.
+- `src/shared/data/minions.json`: combat and worker minions.
+- `src/games/clicker-rts/tech.json`: technology cards.
+- `src/shared/data/enemy.json`: enemy castle definitions and their guard layouts.
 
 These files are imported by Vite and bundled with the app. Use this path for official game content that ships with a build.
 
