@@ -1,70 +1,87 @@
 [
   {
-    "id": "training-fist",
-    "name": "Training Fist",
+    "id": "melee-00",
+    "name": "Bare Fist",
     "handGlyph": "ง",
-    "bareHandGlyph": "ง",
+    "activeGlyph": "⇀",
     "kind": "melee",
-    "description": "A quick close-range jab for testing movement and timing.",
-    "damage": 18,
-    "range": 84,
-    "radius": 52,
-    "attackSpeed": 2.4,
+    "description": "Nothing is equipped, just attack with your fist.",
+    "damage": 10,
+    "range": 60,
+    "radius": 40,
+    "attackSpeed": 1.5,
     "color": "#4777bd",
     "effectGlyph": "💥",
-    "effectSize": 46
+    "effectSize": 50
   },
   {
-    "id": "spark-wand",
-    "name": "Spark Wand",
-    "handGlyph": "╯✧",
-    "bareHandGlyph": "╯",
+    "id": "melee-01",
+    "name": "Punch",
+    "handGlyph": "Ͻ",
+    "activeGlyph": "Ͻ",
+    "kind": "melee",
+    "description": "",
+    "damage": 13,
+    "range": 70,
+    "radius": 40,
+    "attackSpeed": 1.5,
+    "color": "#4777bd",
+    "effectGlyph": "💥",
+    "effectSize": 50
+  },
+  {
+    "id": "melee-02",
+    "name": "Claw",
+    "handGlyph": "ミ",
+    "activeGlyph": "ミ",
+    "kind": "melee",
+    "description": "A wider melee slash for dummy testing.",
+    "damage": 12,
+    "range": 65,
+    "radius": 30,
+    "attackSpeed": 1.8,
+    "color": "#d94f5f",
+    "effectGlyph": "✗",
+    "effectSize": 30
+  },
+
+
+  {
+    "id": "ranged-01",
+    "name": "Spark",
+    "handGlyph": "-{p}",
+    "activeGlyph": "╯",
     "kind": "projectile",
     "description": "Fires a small spark toward the cursor.",
     "damage": 14,
     "range": 680,
     "radius": 18,
-    "attackSpeed": 1.35,
+    "attackSpeed": 1.2,
     "projectile": {
       "glyph": "✧",
       "speed": 620
     },
     "color": "#f0a729",
-    "effectGlyph": "⚡",
-    "effectSize": 40
+    "effectGlyph": "✧",
+    "effectSize": 45
   },
   {
-    "id": "heart-tether",
+    "id": "ranged-02",
     "name": "Heart Tether",
-    "handGlyph": "~♥",
-    "bareHandGlyph": "~",
+    "handGlyph": "~{p}",
+    "activeGlyph": "~",
     "kind": "projectile",
     "description": "A slower heavy heart shot with a larger hit radius.",
-    "damage": 28,
+    "damage": 22,
     "range": 520,
     "radius": 28,
     "attackSpeed": 0.72,
     "projectile": {
       "glyph": "♥",
-      "speed": 420
+      "speed": 450
     },
     "color": "#e83f79",
     "effectGlyph": "💗",
     "effectSize": 42
-  },
-  {
-    "id": "practice-blade",
-    "name": "Practice Blade",
-    "handGlyph": "〆",
-    "bareHandGlyph": "╯",
-    "kind": "melee",
-    "description": "A wider melee slash for dummy testing.",
-    "damage": 26,
-    "range": 116,
-    "radius": 70,
-    "attackSpeed": 1.1,
-    "color": "#d94f5f",
-    "effectGlyph": "💥",
-    "effectSize": 52
   }
 ]

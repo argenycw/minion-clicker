@@ -37,6 +37,7 @@ import {
   tickState,
 } from './state';
 import { GAME_SETTINGS } from '../../shared/settings';
+import { resolveLegacyCastleId, resolveLegacyMinionId, resolveLegacyTechnologyId } from '../../shared/idMigration';
 import {
   clearCustomTech,
   loadCustomTech,
@@ -86,7 +87,7 @@ const loadState = (): GameState => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return createInitialState();
-    const parsed = JSON.parse(saved) as GameState;
+    const parsed = migrateSavedIds(JSON.parse(saved) as GameState);
     return {
       ...createInitialState(),
       ...parsed,
@@ -98,6 +99,32 @@ const loadState = (): GameState => {
     return createInitialState();
   }
 };
+
+function migrateSavedIds(state: GameState): GameState {
+  const owned = Object.fromEntries(Object.entries(state.owned ?? {}).map(([id, count]) => [resolveLegacyMinionId(id), count]));
+  const enemyCastles = (state.enemyCastles ?? []).map((castle) => ({
+    ...castle,
+    id: resolveLegacyCastleId(castle.id),
+    guardSlots: castle.guardSlots.map((slot) => ({ ...slot, unitId: resolveLegacyMinionId(slot.unitId) })),
+  }));
+  const units = (state.units ?? []).map((unit) => ({
+    ...unit,
+    defId: resolveLegacyMinionId(unit.defId),
+    homeCastleId: unit.homeCastleId ? resolveLegacyCastleId(unit.homeCastleId) : undefined,
+    targetId: unit.targetId ? resolveLegacyCastleId(unit.targetId) : undefined,
+  }));
+  const selection = state.selection?.kind === 'castle'
+    ? { ...state.selection, castleId: resolveLegacyCastleId(state.selection.castleId) }
+    : state.selection;
+  return {
+    ...state,
+    owned,
+    units,
+    enemyCastles,
+    selection,
+    unlockedTech: (state.unlockedTech ?? []).map(resolveLegacyTechnologyId),
+  };
+}
 
 const reducer = (state: GameState, action: Action): GameState => {
   if (action.type === 'tick') return tickState(state, action.now);

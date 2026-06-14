@@ -12,11 +12,11 @@ There are three minion types:
 
 Built-in minion IDs are stable slots rather than character names:
 
-- `weak-melee-01`
-- `weak-range-01`
-- `medium-melee-01`
-- `medium-range-01`
-- `strong-worker-01`
+- `minion-01`
+- `minion-02`
+- `minion-09`
+- `minion-05`
+- `minion-16`
 
 Use the displayed `name` for flavor. Use `id` for stable references.
 
@@ -26,7 +26,7 @@ Use the displayed `name` for flavor. Use `id` for stable references.
 
 ```json
 {
-  "id": "custom-heart-knight",
+  "id": "custom-minion-01",
   "type": "melee",
   "tier": "weak",
   "name": "Heart Knight",

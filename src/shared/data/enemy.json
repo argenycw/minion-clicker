@@ -1,6 +1,6 @@
 [
   {
-    "id": "easy-01",
+    "id": "castle-01",
     "name": "Twigkeep",
     "symbol": "🏰",
     "x": 1200,
@@ -26,7 +26,7 @@
     "tier": "easy"
   },
   {
-    "id": "easy-02",
+    "id": "castle-02",
     "name": "Paperkeep",
     "symbol": "🏰",
     "x": 2400,
@@ -58,7 +58,7 @@
     "tier": "easy"
   },
   {
-    "id": "medium-01",
+    "id": "castle-03",
     "name": "The Bandit's Mountain",
     "symbol": "⛰️",
     "x": 4600,
@@ -96,7 +96,7 @@
     "tier": "medium"
   },
   {
-    "id": "medium-02",
+    "id": "castle-04",
     "name": "Orbspire",
     "symbol": "🏯",
     "x": 7300,
@@ -140,7 +140,7 @@
     "tier": "medium"
   },
   {
-    "id": "medium-03",
+    "id": "castle-05",
     "name": "Gilded Keep",
     "symbol": "🏰",
     "x": 8500,
@@ -190,7 +190,7 @@
     "tier": "medium"
   },
   {
-    "id": "hard-01",
+    "id": "castle-06",
     "name": "The City of Nightmare",
     "symbol": "🏰",
     "x": 10100,
@@ -246,7 +246,7 @@
     "tier": "hard"
   },
   {
-    "id": "hard-02",
+    "id": "castle-07",
     "name": "Gilded Crown",
     "symbol": "🏰",
     "x": 12500,
@@ -308,7 +308,7 @@
     "tier": "hard"
   },
   {
-    "id": "hard-03",
+    "id": "castle-08",
     "name": "Ember Court",
     "symbol": "🏰",
     "x": 17400,
@@ -364,7 +364,7 @@
     "tier": "hard"
   },
   {
-    "id": "hard-04",
+    "id": "castle-09",
     "name": "Longshot Bastion",
     "symbol": "🏯",
     "x": 21000,
@@ -426,7 +426,7 @@
     "tier": "hard"
   },
   {
-    "id": "hard-05",
+    "id": "castle-10",
     "name": "Crownspire",
     "symbol": "🏯",
     "x": 14600,

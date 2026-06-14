@@ -1,6 +1,6 @@
 [
   {
-    "id": "weak-melee-01",
+    "id": "minion-01",
     "type": "melee",
     "name": "Scout",
     "description": "Melee. A swift scout that darts in and out, striking with a hidden blade.",
@@ -31,7 +31,7 @@
     "tier": "weak"
   },
   {
-    "id": "weak-range-01",
+    "id": "minion-02",
     "type": "ranged",
     "name": "Pout Archer",
     "description": "Ranged. Fires little annoyed spark darts.",
@@ -65,7 +65,7 @@
     "tier": "weak"
   },
   {
-    "id": "weak-range-02",
+    "id": "minion-03",
     "type": "ranged",
     "name": "Heart Sender",
     "description": "Ranged. Sends heart projectiles with rude accuracy.",
@@ -100,7 +100,7 @@
     "tier": "weak"
   },
   {
-    "id": "weak-melee-02",
+    "id": "minion-04",
     "type": "melee",
     "name": "Hand Guard",
     "description": "Melee. Turns the final hand into a bash weapon.",
@@ -131,7 +131,7 @@
     "tier": "weak"
   },
   {
-    "id": "medium-range-01",
+    "id": "minion-05",
     "type": "ranged",
     "name": "Shuriken Ninja",
     "description": "Ranged. Quick stance, quick throw, quick trouble.",
@@ -166,7 +166,7 @@
     "tier": "medium"
   },
   {
-    "id": "strong-melee-01",
+    "id": "minion-06",
     "type": "melee",
     "name": "Power Puncher",
     "description": "Melee. A determined fighter delivering powerful close-range punches.",
@@ -197,7 +197,7 @@
     "tier": "strong"
   },
   {
-    "id": "strong-range-01",
+    "id": "minion-07",
     "type": "ranged",
     "name": "Fire Breather",
     "description": "Ranged. Unleashes torrents of flame, incinerating foes.",
@@ -234,7 +234,7 @@
     "tier": "strong"
   },
   {
-    "id": "strong-range-02",
+    "id": "minion-08",
     "type": "ranged",
     "name": "Lightning Strike",
     "description": "Ranged. Calls down bolts of pure electricity to stun and damage enemies.",
@@ -271,7 +271,7 @@
     "tier": "strong"
   },
   {
-    "id": "medium-melee-01",
+    "id": "minion-09",
     "type": "melee",
     "name": "Uppercut Sprout",
     "description": "Melee. Crouches, pops up, and punches upward.",
@@ -300,7 +300,7 @@
     "tier": "medium"
   },
   {
-    "id": "medium-melee-02",
+    "id": "minion-10",
     "type": "melee",
     "name": "Blade Smile",
     "description": "Melee. Walks in and bonks very sincerely.",
@@ -331,7 +331,7 @@
     "tier": "medium"
   },
   {
-    "id": "strong-range-03",
+    "id": "minion-11",
     "type": "ranged",
     "name": "Orb Keeper",
     "description": "Ranged. Conjures a calm orb and lets it do the arguing.",
@@ -368,7 +368,7 @@
     "tier": "strong"
   },
   {
-    "id": "strong-range-04",
+    "id": "minion-12",
     "type": "ranged",
     "name": "Star Mage",
     "description": "Ranged. Throws glittering math at fortifications.",
@@ -405,7 +405,7 @@
     "tier": "strong"
   },
   {
-    "id": "strong-range-05",
+    "id": "minion-13",
     "type": "ranged",
     "name": "Sniper Rifle",
     "description": "Ranged. Head Shots.",
@@ -442,7 +442,7 @@
     "tier": "strong"
   },
   {
-    "id": "weak-worker-01",
+    "id": "minion-14",
     "type": "worker",
     "name": "Coin Hummer",
     "description": "Worker. Generates a trickle of coins.",
@@ -473,7 +473,7 @@
     "tier": "weak"
   },
   {
-    "id": "medium-worker-01",
+    "id": "minion-15",
     "type": "worker",
     "name": "Tea Accountant",
     "description": "Worker. Turns paperwork into passive income.",
@@ -504,7 +504,7 @@
     "tier": "medium"
   },
   {
-    "id": "strong-worker-01",
+    "id": "minion-16",
     "type": "worker",
     "name": "Spark Clerk",
     "description": "Worker. Expensive, smug, profitable.",

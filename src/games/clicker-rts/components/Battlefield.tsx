@@ -3,6 +3,9 @@ import { LocateFixed } from 'lucide-react';
 import { getUnit } from '../../../shared/content';
 import { CastleEntity, CombatEvent, GameState, ProjectileEntity, UnitEntity, world } from '../state';
 import { GAME_SETTINGS } from '../../../shared/settings';
+import { drawTerrainVisual } from '../../../shared/terrainRenderer';
+import { createProceduralGround, drawProceduralGround } from '../../../shared/proceduralGround';
+import { getPunchOffset } from '../../../shared/combatPresentation';
 
 type Props = {
   state: GameState;
@@ -362,13 +365,13 @@ function drawScene(
   ctx.scale(camera.zoom, camera.zoom);
   ctx.translate(-camera.x, -camera.y);
 
-  drawMap(ctx);
+  drawMap(ctx, state.mapSeed, now);
   drawBase(ctx);
   for (const castle of state.enemyCastles) drawCastle(ctx, castle);
   for (const ping of pings) drawPing(ctx, ping, now);
   for (const unit of state.units) {
     if (unit.team === 'player' && getUnit(unit.defId).kind === 'worker') continue;
-    drawUnit(ctx, unit, state.selectedUnitIds.includes(unit.id) || state.selection.kind === 'unit' && state.selection.unitId === unit.id, now);
+    drawUnit(ctx, unit, state, state.selectedUnitIds.includes(unit.id) || state.selection.kind === 'unit' && state.selection.unitId === unit.id, now);
   }
   for (const projectile of state.projectiles) drawProjectile(ctx, projectile);
   for (const effect of fx) drawEffect(ctx, effect, now);
@@ -380,12 +383,18 @@ function drawScene(
   }
 }
 
-function drawMap(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = '#b7d889';
-  ctx.fillRect(0, 0, world.width, world.height);
+const clickerGroundBySeed = new Map<number, ReturnType<typeof createProceduralGround>>();
 
-  ctx.strokeStyle = 'rgba(74, 107, 61, 0.16)';
-  ctx.lineWidth = 2;
+function drawMap(ctx: CanvasRenderingContext2D, seed: number, now: number) {
+  let tiles = clickerGroundBySeed.get(seed);
+  if (!tiles) {
+    tiles = createProceduralGround(world.width, world.height, world.spawnPlayer, seed);
+    clickerGroundBySeed.set(seed, tiles);
+  }
+  drawProceduralGround(ctx, tiles, world.width, world.height, now);
+
+  ctx.strokeStyle = 'rgba(74, 107, 61, 0.065)';
+  ctx.lineWidth = 1;
   for (let x = 0; x < world.width; x += GAME_SETTINGS.map.gridSize) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -405,59 +414,17 @@ function drawMap(ctx: CanvasRenderingContext2D) {
 }
 
 function drawTerrainProp(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, size: number, rotation: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rotation);
-  ctx.scale(size, size);
-
-  if (kind === 'tree') {
-    ctx.fillStyle = 'rgba(49, 113, 56, 0.28)';
-    ctx.beginPath();
-    ctx.ellipse(0, 3, 22, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#5f8e3f';
-    ctx.beginPath();
-    ctx.arc(-8, -6, 13, 0, Math.PI * 2);
-    ctx.arc(8, -7, 15, 0, Math.PI * 2);
-    ctx.arc(0, -18, 13, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (kind === 'rock') {
-    ctx.fillStyle = '#8f9187';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 16, 11, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(-5, -4, 6, 3, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (kind === 'flower') {
-    ctx.fillStyle = '#d95f91';
-    for (let i = 0; i < 5; i += 1) {
-      ctx.beginPath();
-      ctx.arc(Math.cos(i * 1.26) * 7, Math.sin(i * 1.26) * 7, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#f3d64f';
-    ctx.beginPath();
-    ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (kind === 'mushroom') {
-    ctx.fillStyle = '#f4ead1';
-    ctx.fillRect(-4, -2, 8, 13);
-    ctx.fillStyle = '#c94d5d';
-    ctx.beginPath();
-    ctx.arc(0, -4, 12, Math.PI, 0);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = '#8a6740';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 12, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(60, 42, 24, 0.35)';
-    ctx.stroke();
-  }
-
-  ctx.restore();
+  const dimensions = kind === 'tree' ? [58, 52] : kind === 'rock' ? [36, 28] : kind === 'stump' ? [26, 22] : [18, 18];
+  drawTerrainVisual(ctx, {
+    id: `clicker-${kind}-${Math.round(x)}-${Math.round(y)}`,
+    kind: kind as 'tree' | 'rock' | 'flower' | 'mushroom' | 'stump',
+    x,
+    y,
+    width: dimensions[0] * size,
+    height: dimensions[1] * size,
+    rotation,
+    blocking: kind === 'tree' || kind === 'rock' || kind === 'stump',
+  });
 }
 
 function drawBase(ctx: CanvasRenderingContext2D) {
@@ -516,17 +483,22 @@ function drawCastle(ctx: CanvasRenderingContext2D, castle: CastleEntity) {
   ctx.restore();
 }
 
-function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, selected: boolean, now: number) {
+function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, state: GameState, selected: boolean, now: number) {
   const definition = getUnit(unit.defId);
   const faceWobble = Math.sin(now / 240 + unit.x * 0.01) * 1.2;
   const isEnemy = unit.team === 'enemy';
   const isAttacking = Boolean(unit.lastAttackAt && now - unit.lastAttackAt < 320);
   const isWorking = definition.kind === 'worker' && definition.coinsPerSecond && Math.sin(now / 360 + unit.x) > 0.58;
   const body = isAttacking ? definition.attackBody : isWorking && definition.workBody ? definition.workBody : definition.body;
-  const useAttackHands = isAttacking && definition.type === 'ranged';
+  const useAttackHands = isAttacking;
   const leftHand = useAttackHands ? definition.attackLeftHand : isWorking ? definition.workLeftHand ?? definition.leftHand : definition.leftHand;
   const rightHand = useAttackHands ? definition.attackRightHand : isWorking ? definition.workRightHand ?? definition.rightHand : definition.rightHand;
   const bodyWidth = definition.pillWidth;
+  const target = unit.targetId
+    ? state.units.find((candidate) => candidate.id === unit.targetId) ?? state.enemyCastles.find((candidate) => candidate.id === unit.targetId)
+    : undefined;
+  const attackProgress = unit.lastAttackAt ? Math.min(1, (now - unit.lastAttackAt) / 320) : 1;
+  const punch = isAttacking && definition.type === 'melee' && target ? getPunchOffset(unit, target, attackProgress) : { x: 0, y: 0 };
 
   ctx.save();
   ctx.translate(unit.x, unit.y);
@@ -555,10 +527,12 @@ function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, selected: boo
   ctx.fillText(body, 0, 0);
   ctx.font = `${unitHandFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
   if (leftHand) {
-    ctx.fillText(leftHand, -bodyWidth / 2 - unitHandGap, 0);
+    const attackingLeft = definition.type === 'melee' && unit.facing === 'left';
+    ctx.fillText(leftHand, -bodyWidth / 2 - unitHandGap + (attackingLeft ? -punch.x : 0), attackingLeft ? punch.y : 0);
   }
   if (rightHand) {
-    ctx.fillText(rightHand, bodyWidth / 2 + unitHandGap, 0);
+    const attackingRight = definition.type === 'melee' && unit.facing === 'right';
+    ctx.fillText(rightHand, bodyWidth / 2 + unitHandGap + (attackingRight ? punch.x : 0), attackingRight ? punch.y : 0);
   }
   ctx.restore();
 

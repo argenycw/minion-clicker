@@ -8,6 +8,8 @@ Built-in content now lives with either shared game systems or the game that owns
 
 These files are imported by Vite and bundled with the app. Use this path for official game content that ships with a build.
 
+All authored IDs must follow `docs/id-conventions.md`: use a stable type plus numeric index such as `minion-01`, `castle-03`, or `technology-02`. Do not encode a name, tier, effect, or other editable content into an ID.
+
 Use `public` only when deployed content must be swapped without rebuilding the app. That would require an async runtime load step before the first game state is created.
 
 ## DLC Imports
@@ -25,12 +27,12 @@ Castle DLC is not exposed in the UI yet because changing enemy content safely ne
 
 ## Enemy Defenders
 
-Built-in enemy castle IDs use difficulty slots such as `easy-01`, `medium-01`, and `hard-03`.
+Built-in enemy castle IDs use stable numeric slots such as `castle-01`, `castle-03`, and `castle-08`.
 
 Castle defenders can reference an exact minion:
 
 ```json
-{ "unitId": "weak-melee-01", "dx": 90, "dy": 55 }
+{ "unitId": "minion-01", "dx": 90, "dy": 55 }
 ```
 
 Or they can request a randomized guard by tier and combat type:

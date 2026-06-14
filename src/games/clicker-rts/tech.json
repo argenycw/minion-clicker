@@ -1,6 +1,6 @@
 [
   {
-    "id": "bigger-treasury",
+    "id": "technology-01",
     "name": "Bigger Treasury",
     "icon": "🪙",
     "description": "Money button gains +1 per click.",
@@ -8,7 +8,7 @@
     "effect": { "clickPower": 1 }
   },
   {
-    "id": "bard",
+    "id": "technology-02",
     "name": "Bard",
     "icon": "🎵",
     "description": "Player combat minions gain +10% attack.",
@@ -16,7 +16,7 @@
     "effect": { "attackMultiplier": 1.1 }
   },
   {
-    "id": "better-armor",
+    "id": "technology-03",
     "name": "Better Armor",
     "icon": "🛡️",
     "description": "Player combat minions gain +20% max HP.",
@@ -24,7 +24,7 @@
     "effect": { "healthMultiplier": 1.2 }
   },
   {
-    "id": "war-flag",
+    "id": "technology-04",
     "name": "War Flag",
     "icon": "🚩",
     "description": "Player combat minions gain +25% attack.",
@@ -32,7 +32,7 @@
     "effect": { "attackMultiplier": 1.25 }
   },
   {
-    "id": "golden-button",
+    "id": "technology-05",
     "name": "Golden Button",
     "icon": "✨",
     "description": "Money button gains +10 per click.",

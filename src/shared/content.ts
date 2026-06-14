@@ -1,6 +1,7 @@
 import builtInMinions from './data/minions.json';
 import builtInCastles from './data/enemy.json';
 import { GAME_SETTINGS, WORLD_HEIGHT, WORLD_WIDTH } from './settings';
+import { resolveLegacyMinionId } from './idMigration';
 
 export type ContentSource = 'built-in' | 'dlc';
 
@@ -129,7 +130,7 @@ export type TerrainProp = {
 const CUSTOM_MINIONS_KEY = 'minion-clicker-custom-minions-v1';
 
 export const minionSchemaExample: MinionJson = {
-  id: 'custom-heart-knight',
+  id: 'custom-minion-01',
   type: 'melee',
   tier: 'weak',
   name: 'Heart Knight',
@@ -280,7 +281,8 @@ export const combatMinions = unitDefinitions.filter((unit) => unit.kind === 'com
 export const workerMinions = unitDefinitions.filter((unit) => unit.kind === 'worker').sort((a, b) => a.cost - b.cost);
 
 export const getUnit = (id: string) => {
-  const unit = unitDefinitions.find((definition) => definition.id === id);
+  const resolvedId = resolveLegacyMinionId(id);
+  const unit = unitDefinitions.find((definition) => definition.id === resolvedId);
   if (!unit) throw new Error(`Unknown unit: ${id}`);
   return unit;
 };

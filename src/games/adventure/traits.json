@@ -1,7 +1,25 @@
 [
   {
-    "id": "keen-edge-stone",
-    "name": "Keen Edge Stone",
+    "id": "augmentation-01",
+    "name": "Attack Up I",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "Imprints sharper physical force into a weapon.",
+    "damageMultiplier": 1.05
+  },
+  {
+    "id": "augmentation-02",
+    "name": "Attack Up II",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "Imprints sharper physical force into a weapon.",
+    "damageMultiplier": 1.1
+  },
+  {
+    "id": "augmentation-03",
+    "name": "Attack Up III",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
@@ -9,39 +27,57 @@
     "damageMultiplier": 1.2
   },
   {
-    "id": "quickening-stone",
-    "name": "Quickening Stone",
-    "icon": "◇",
+    "id": "augmentation-04",
+    "name": "Quicken I",
+    "icon": "⚡︎",
     "color": "#efb33f",
     "family": "utility",
     "description": "Lightens the weapon rhythm and improves attack speed.",
-    "attackSpeedMultiplier": 1.18
+    "attackSpeedMultiplier": 1.1
   },
   {
-    "id": "reach-stone",
-    "name": "Reach Stone",
-    "icon": "⬡",
+    "id": "augmentation-05",
+    "name": "Quicken II",
+    "icon": "⚡︎",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "Lightens the weapon rhythm and improves attack speed.",
+    "attackSpeedMultiplier": 1.2
+  },
+  {
+    "id": "augmentation-06",
+    "name": "Reach I",
+    "icon": "➚",
     "color": "#efb33f",
     "family": "utility",
     "description": "Extends the effective range of the weapon.",
-    "rangeMultiplier": 1.18
+    "rangeMultiplier": 1.1
   },
   {
-    "id": "scatter-stone",
-    "name": "Scatter Stone",
-    "icon": "✹",
+    "id": "augmentation-07",
+    "name": "Reach II",
+    "icon": "➚",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "Extends the effective range of the weapon.",
+    "rangeMultiplier": 1.1
+  },
+  {
+    "id": "augmentation-08",
+    "name": "Scatter I",
+    "icon": "⁂",
     "color": "#7254ba",
     "family": "magic",
     "description": "Adds one extra projectile to ranged weapons.",
     "extraProjectiles": 1
   },
   {
-    "id": "impact-stone",
-    "name": "Impact Stone",
-    "icon": "✦",
+    "id": "augmentation-09",
+    "name": "Impact I",
+    "icon": "▲",
     "color": "#ff7d55",
     "family": "impact",
     "description": "Expands the hit area around the strike.",
-    "radiusMultiplier": 1.25
+    "radiusMultiplier": 1.2
   }
 ]

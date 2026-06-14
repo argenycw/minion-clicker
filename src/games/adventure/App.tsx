@@ -1,35 +1,31 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Backpack, Crosshair, FlaskConical, HeartPulse, MousePointer2, Swords } from 'lucide-react';
-import { GAME_SETTINGS } from '../../shared/settings';
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { Backpack, Crosshair, FlaskConical, HeartPulse, Lock, MousePointer2, Sparkles, Swords } from 'lucide-react';
 import { getTrait, weaponDefinitions, type TraitDefinition } from './content';
 import {
-  applyTraitToWeapon,
   applyTraitToWeaponByItemNo,
-  activateWeapon,
   adventureWorld,
   createInitialAdventureState,
-  disposeInventoryItem,
-  equipWeapon,
-  flashItemSlot,
   getEffectiveWeapon,
   getEquippedWeapon,
   PLAYER_MOVE_SPEED,
-  removeTraitFromWeapon,
-  tickAdventureState,
-  unequipWeapon,
-  usePotionByItemNo,
-  type Actor,
   type AdventureState,
-  type CombatEffect,
   type EffectiveWeapon,
   type HandSlot,
-  type Projectile,
 } from './state';
+import { bindAdventureCameraZoom, createAdventureCamera, followPlayerCamera, screenToWorld, type AdventureCamera } from './camera';
+import { adventureReducer } from './reducer';
+import { drawScene } from './sceneRenderer';
+import { getOutfit, outfitDefinitions } from './outfits';
+import { createSkillTreeLayout, getPassiveSkillModifiers, getSkill, getSkillPrerequisites, skillTreeDefinition, type SkillNodeDefinition } from './skills';
+
+type InventoryItemKind = 'weapon' | 'trait' | 'potion';
 
 type InventorySelection =
   | { kind: 'weapon'; itemNo: number }
   | { kind: 'trait'; itemNo: number }
-  | { kind: 'potion'; itemNo: number };
+  | { kind: 'potion'; itemNo: number }
+  | { kind: 'outfit'; outfitId: string }
+  | { kind: 'skill'; skillId: string };
 
 declare global {
   interface Window {
@@ -37,7 +33,7 @@ declare global {
       state: () => AdventureState;
       openInventory: () => void;
       closeInventory: () => void;
-      selectItem: (kind: InventorySelection['kind'], itemNo: number) => void;
+      selectItem: (kind: InventoryItemKind, itemNo: number) => void;
       equip: (hand: HandSlot, itemNo: number) => void;
       useItem: (itemNo: number) => void;
       applyStone: (stoneItemNo: number, weaponItemNo: number) => void;
@@ -50,47 +46,12 @@ declare global {
   }
 }
 
-type Action =
-  | { type: 'tick'; now: number; keys: Set<string>; aim: { x: number; y: number } }
-  | { type: 'activate'; hand: HandSlot; now: number; aim: { x: number; y: number } }
-  | { type: 'item'; slot: number; now: number }
-  | { type: 'equipWeapon'; hand: HandSlot; weaponInstanceId: string }
-  | { type: 'unequipWeapon'; hand: HandSlot }
-  | { type: 'applyTrait'; traitId: string; weaponInstanceId: string }
-  | { type: 'removeTrait'; weaponInstanceId: string; index: number }
-  | { type: 'usePotion'; itemNo: number; now: number }
-  | { type: 'dispose'; kind: InventorySelection['kind']; itemNo: number }
-  | { type: 'reset' };
-
-type Camera = {
-  x: number;
-  y: number;
-  zoom: number;
-};
-
-const unitBodyHeight = 40;
-const unitBodyFont = 18;
-const unitHandFont = 17;
-const unitHandGap = 8;
-const initialZoom = 1.05;
-
-function reducer(state: AdventureState, action: Action): AdventureState {
-  if (action.type === 'tick') return tickAdventureState(state, action.now, action);
-  if (action.type === 'activate') return activateWeapon(state, action.hand, action.aim, action.now);
-  if (action.type === 'item') return flashItemSlot(state, action.slot, action.now);
-  if (action.type === 'equipWeapon') return equipWeapon(state, action.hand, action.weaponInstanceId);
-  if (action.type === 'unequipWeapon') return unequipWeapon(state, action.hand);
-  if (action.type === 'applyTrait') return applyTraitToWeapon(state, action.traitId, action.weaponInstanceId);
-  if (action.type === 'removeTrait') return removeTraitFromWeapon(state, action.weaponInstanceId, action.index);
-  if (action.type === 'usePotion') return usePotionByItemNo(state, action.itemNo, action.now);
-  if (action.type === 'dispose') return disposeInventoryItem(state, action.kind === 'potion' ? 'potion' : action.kind, action.itemNo);
-  return createInitialAdventureState();
-}
-
 export function App() {
-  const [state, dispatch] = useReducer(reducer, undefined, createInitialAdventureState);
+  const [state, dispatch] = useReducer(adventureReducer, undefined, createInitialAdventureState);
   const [hoverHand, setHoverHand] = useState<HandSlot | undefined>();
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [panelView, setPanelView] = useState<'inventory' | 'skills'>('inventory');
+  const [selectedSkillId, setSelectedSkillId] = useState(skillTreeDefinition[0].id);
   const [selectedItem, setSelectedItem] = useState<InventorySelection | undefined>({ kind: 'weapon', itemNo: 2 });
   const [traitPickerWeaponNo, setTraitPickerWeaponNo] = useState<number | undefined>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -99,18 +60,15 @@ export function App() {
   const keysRef = useRef(new Set<string>());
   const heldAttackRef = useRef(new Set<HandSlot>());
   const aimRef = useRef({ x: adventureWorld.spawn.x + 1, y: adventureWorld.spawn.y });
-  const cameraRef = useRef<Camera>({
-    x: adventureWorld.spawn.x - GAME_SETTINGS.map.initialViewportWidth / initialZoom / 2,
-    y: adventureWorld.spawn.y - GAME_SETTINGS.map.initialViewportHeight / initialZoom / 2,
-    zoom: initialZoom,
-  });
+  const cameraRef = useRef<AdventureCamera>(createAdventureCamera());
+  const trackedPlayerRef = useRef({ x: adventureWorld.spawn.x, y: adventureWorld.spawn.y });
 
   stateRef.current = state;
   hoverHandRef.current = hoverHand;
   const leftWeapon = useMemo(() => getEquippedWeapon(state, 'left'), [state]);
   const rightWeapon = useMemo(() => getEquippedWeapon(state, 'right'), [state]);
-  const status = useMemo(() => getCharacterStatus(leftWeapon, rightWeapon), [leftWeapon, rightWeapon]);
-  const dummy = state.enemies[0];
+  const status = useMemo(() => getCharacterStatus(leftWeapon, rightWeapon, state), [leftWeapon, rightWeapon, state]);
+  const combatTarget = getCombatTarget(state);
   const now = performance.now();
 
   useEffect(() => {
@@ -122,11 +80,22 @@ export function App() {
       }
       if (/^[1-5]$/.test(key)) {
         event.preventDefault();
-        dispatch({ type: 'item', slot: Number(key), now: performance.now() });
+        dispatch({ type: 'hotbar', slot: Number(key), now: performance.now(), aim: aimRef.current });
       }
       if (key === 'i') {
         event.preventDefault();
-        setInventoryOpen((open) => !open);
+        setPanelView('inventory');
+        setInventoryOpen(true);
+      }
+      if (key === 'c') {
+        event.preventDefault();
+        setPanelView('inventory');
+        setInventoryOpen(true);
+      }
+      if (key === 'k') {
+        event.preventDefault();
+        setPanelView('skills');
+        setInventoryOpen(true);
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -138,6 +107,12 @@ export function App() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    return bindAdventureCameraZoom(canvas, cameraRef, () => stateRef.current.player);
   }, []);
 
   useEffect(() => {
@@ -203,7 +178,7 @@ export function App() {
       }
       const canvas = canvasRef.current;
       if (canvas) {
-        syncCamera(cameraRef.current, stateRef.current.player, canvas);
+        followPlayerCamera(cameraRef.current, stateRef.current.player, trackedPlayerRef.current, canvas);
         drawScene(canvas, cameraRef.current, stateRef.current, aimRef.current, hoverHandRef.current, frameNow);
       }
       frame = requestAnimationFrame(loop);
@@ -252,7 +227,7 @@ export function App() {
             <Swords size={19} />
             <div>
               <h1>Adventure</h1>
-              <p>Prototype combat sandbox</p>
+              <p>Explore | Combat | Strengthen</p>
             </div>
           </div>
           <div className="adventure-vitals">
@@ -274,19 +249,19 @@ export function App() {
           </div>
         </div>
 
-        <div className="adventure-dummy-panel">
-          <Crosshair size={18} />
-          <span>{dummy.name}</span>
-          <strong>{Math.ceil(dummy.hp)} / {dummy.maxHp}</strong>
-          <div className="adventure-bar">
-            <span style={{ width: `${Math.max(0, dummy.hp / dummy.maxHp) * 100}%` }} />
+        <div className="adventure-right-hud">
+          {combatTarget && <CombatTargetPanel target={combatTarget} />}
+          <div className="adventure-panel-toggles">
+            <button className="inventory-toggle" type="button" onClick={() => { setPanelView('inventory'); setInventoryOpen(true); }}>
+              <Backpack size={18} />
+              [I/C] Character
+            </button>
+            <button className="inventory-toggle" type="button" onClick={() => { setPanelView('skills'); setInventoryOpen(true); }}>
+              <Sparkles size={18} />
+              [K] Skills · {state.skills.points} points
+            </button>
           </div>
         </div>
-
-        <button className="inventory-toggle" type="button" onClick={() => setInventoryOpen((open) => !open)}>
-          <Backpack size={18} />
-          [I] Inventory
-        </button>
 
         <div className="adventure-weapons" aria-label="Weapon slots">
           <WeaponSlot
@@ -311,29 +286,32 @@ export function App() {
           />
         </div>
 
-        <div className="adventure-items" aria-label="Item slots">
-          {[1, 2, 3, 4, 5].map((slot) => (
-            <button
+        <div className="adventure-items" aria-label="Hotbar slots">
+          {[1, 2, 3, 4, 5].map((slot) => {
+            return <HotbarSlotButton
               key={slot}
-              className={state.itemFlash.some((flash) => flash.slot === slot) ? 'item-slot item-used' : 'item-slot'}
-              type="button"
-              onClick={() => dispatch({ type: 'item', slot, now: performance.now() })}
-              title={`Item slot ${slot}`}
-            >
-              <small>{slot}</small>
-              <FlaskConical size={18} />
-            </button>
-          ))}
+              slot={slot}
+              state={state}
+              now={now}
+              onActivate={() => dispatch({ type: 'hotbar', slot, now: performance.now(), aim: aimRef.current })}
+            />;
+          })}
         </div>
 
         <div className="adventure-controls">
           <MousePointer2 size={16} />
-          <span>WASD/Arrows move · Cursor aims · Left/Right click attack · I inventory</span>
+          <span>WASD/Arrows move · Cursor aims · Left/Right click attack · 1–5 item/skill · Wheel/pinch zoom · I inventory · K skills</span>
         </div>
 
         {inventoryOpen && (
           <InventoryPanel
             state={state}
+            view={panelView}
+            onViewChange={setPanelView}
+            selectedSkillId={selectedSkillId}
+            onSelectSkill={setSelectedSkillId}
+            onUnlockSkill={(skillId) => dispatch({ type: 'unlockSkill', skillId })}
+            onEquipSkill={(skillId, slot) => dispatch({ type: 'equipSkill', skillId, slot })}
             selectedItem={selectedItem}
             onSelectItem={setSelectedItem}
             onEquip={(hand, weaponInstanceId) => dispatch({ type: 'equipWeapon', hand, weaponInstanceId })}
@@ -341,6 +319,9 @@ export function App() {
             onApplyTrait={(traitId, weaponInstanceId) => dispatch({ type: 'applyTrait', traitId, weaponInstanceId })}
             onRemoveTrait={(weaponInstanceId, index) => dispatch({ type: 'removeTrait', weaponInstanceId, index })}
             onUse={(itemNo) => dispatch({ type: 'usePotion', itemNo, now: performance.now() })}
+            onEquipItem={(itemNo, slot) => dispatch({ type: 'equipItem', itemNo, slot })}
+            onCustomize={(changes) => dispatch({ type: 'customizeCharacter', changes })}
+            onEquipOutfit={(outfitId) => dispatch({ type: 'equipOutfit', outfitId })}
             onDispose={(kind, itemNo) => {
               dispatch({ type: 'dispose', kind, itemNo });
               setSelectedItem(undefined);
@@ -355,6 +336,33 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function HotbarSlotButton({ slot, state, now, onActivate }: { slot: number; state: AdventureState; now: number; onActivate: () => void }) {
+  const entry = state.hotbarSlots[slot - 1];
+  const flashed = state.itemFlash.some((flash) => flash.slot === slot);
+  if (!entry) {
+    return <button className={flashed ? 'item-slot item-used' : 'item-slot'} type="button" onClick={onActivate} title={`Empty hotbar slot ${slot}`}>
+      <small>{slot}</small><FlaskConical size={18} />
+    </button>;
+  }
+  if (entry.kind === 'potion') {
+    const item = state.inventory.potions.find((potion) => potion.itemNo === entry.itemNo);
+    return <button className={flashed ? 'item-slot item-used' : 'item-slot'} type="button" onClick={onActivate} title={item ? `${item.name} x${item.count}` : 'Unavailable item'}>
+      <small>{slot}</small><span>{item?.icon ?? '×'}</span>{item && <em>x{item.count}</em>}
+    </button>;
+  }
+  const skill = getSkill(entry.skillId);
+  const readyAt = state.skills.cooldownReadyAt[skill.id] ?? 0;
+  const cooldownMs = skill.active?.cooldownMs ?? 1;
+  const remaining = Math.max(0, readyAt - now);
+  const cooldown = Math.min(1, remaining / cooldownMs);
+  return <button className={`item-slot active-skill-slot ${remaining <= 0 ? 'ready' : ''} ${flashed ? 'item-used' : ''}`} type="button" onClick={onActivate} title={`${skill.name}: ${skill.description}`}>
+    <small>{slot}</small>
+    <span className="active-skill-glyph" style={{ color: skill.color }}>{skill.icon}</span>
+    <span className="weapon-cooldown" style={{ background: `conic-gradient(rgba(18, 22, 28, 0.68) ${cooldown * 100}%, rgba(18, 22, 28, 0) 0)`, opacity: remaining > 0 ? 1 : 0 }} />
+    {remaining > 0 && <em>{Math.ceil(remaining / 1000)}s</em>}
+  </button>;
 }
 
 function WeaponSlot({
@@ -416,6 +424,12 @@ function WeaponSlot({
 
 function InventoryPanel({
   state,
+  view,
+  onViewChange,
+  selectedSkillId,
+  onSelectSkill,
+  onUnlockSkill,
+  onEquipSkill,
   selectedItem,
   onSelectItem,
   onEquip,
@@ -423,6 +437,9 @@ function InventoryPanel({
   onApplyTrait,
   onRemoveTrait,
   onUse,
+  onEquipItem,
+  onCustomize,
+  onEquipOutfit,
   onDispose,
   traitPickerWeaponNo,
   onOpenTraitPicker,
@@ -430,6 +447,12 @@ function InventoryPanel({
   onClose,
 }: {
   state: AdventureState;
+  view: 'inventory' | 'skills';
+  onViewChange: (view: 'inventory' | 'skills') => void;
+  selectedSkillId: string;
+  onSelectSkill: (skillId: string) => void;
+  onUnlockSkill: (skillId: string) => void;
+  onEquipSkill: (skillId: string, slot: number) => void;
   selectedItem: InventorySelection | undefined;
   onSelectItem: (selection: InventorySelection | undefined) => void;
   onEquip: (hand: HandSlot, weaponInstanceId: string) => void;
@@ -437,24 +460,60 @@ function InventoryPanel({
   onApplyTrait: (traitId: string, weaponInstanceId: string) => void;
   onRemoveTrait: (weaponInstanceId: string, index: number) => void;
   onUse: (itemNo: number) => void;
-  onDispose: (kind: InventorySelection['kind'], itemNo: number) => void;
+  onEquipItem: (itemNo: number, slot: number) => void;
+  onCustomize: (changes: { body?: string; color?: string; pillWidth?: number }) => void;
+  onEquipOutfit: (outfitId: string) => void;
+  onDispose: (kind: InventoryItemKind, itemNo: number) => void;
   traitPickerWeaponNo: number | undefined;
   onOpenTraitPicker: (weaponItemNo: number) => void;
   onCloseTraitPicker: () => void;
   onClose: () => void;
 }) {
   return (
-    <aside className="inventory-panel" aria-label="Inventory">
+    <aside className={`inventory-panel ${view === 'skills' ? 'skill-panel' : ''}`} aria-label="Adventure menu">
       <div className="inventory-heading">
-        <div>
-          <h2>Inventory</h2>
-          <p>Weapons, items, and Imprint Stones</p>
+        <div className="adventure-panel-tabs">
+          <button className={view === 'inventory' ? 'selected' : undefined} type="button" onClick={() => onViewChange('inventory')}>
+            <Backpack size={17} /> Character
+          </button>
+          <button className={view === 'skills' ? 'selected' : undefined} type="button" onClick={() => onViewChange('skills')}>
+            <Sparkles size={17} /> Skills <em>{state.skills.points}</em>
+          </button>
         </div>
         <button type="button" onClick={onClose} aria-label="Close inventory">×</button>
       </div>
 
-      <div className="inventory-body">
+      {view === 'skills' ? (
+        <SkillTreePanel
+          state={state}
+          selectedSkillId={selectedSkillId}
+          onSelectSkill={onSelectSkill}
+          onUnlockSkill={onUnlockSkill}
+          onEquipSkill={onEquipSkill}
+        />
+      ) : <div className="inventory-body">
+        <CharacterEditor
+          state={state}
+          selectedItem={selectedItem}
+          onSelectItem={onSelectItem}
+          onCustomize={onCustomize}
+        />
+
         <div className="inventory-bag">
+          <InventoryGroup title="Items">
+            {state.inventory.potions.map((item) => (
+              <InventorySlot
+                key={item.itemNo}
+                selected={selectedItem?.kind === 'potion' && selectedItem.itemNo === item.itemNo}
+                itemNo={item.itemNo}
+                icon={item.icon}
+                name={item.name}
+                countLabel={`x${item.count}`}
+                onClick={() => onSelectItem({ kind: 'potion', itemNo: item.itemNo })}
+              />
+            ))}
+          </InventoryGroup>
+
           <InventoryGroup title="Equipment">
             {state.inventory.weapons.map((weapon) => {
               const effective = getEffectiveWeapon(state, weapon.id);
@@ -474,21 +533,7 @@ function InventoryPanel({
             })}
           </InventoryGroup>
 
-          <InventoryGroup title="Useable Items">
-            {state.inventory.potions.map((item) => (
-              <InventorySlot
-                key={item.itemNo}
-                selected={selectedItem?.kind === 'potion' && selectedItem.itemNo === item.itemNo}
-                itemNo={item.itemNo}
-                icon={item.icon}
-                name={item.name}
-                countLabel={`x${item.count}`}
-                onClick={() => onSelectItem({ kind: 'potion', itemNo: item.itemNo })}
-              />
-            ))}
-          </InventoryGroup>
-
-          <InventoryGroup title="Imprint Stones">
+          <InventoryGroup title="Augmentations">
             {state.inventory.traits.map((stack) => {
               const trait = getTrait(stack.traitId);
               return (
@@ -515,14 +560,324 @@ function InventoryPanel({
             onApplyTrait={onApplyTrait}
             onRemoveTrait={onRemoveTrait}
             onUse={onUse}
+            onEquipItem={onEquipItem}
+            onEquipSkill={onEquipSkill}
+            onEquipOutfit={onEquipOutfit}
             onDispose={onDispose}
             traitPickerWeaponNo={traitPickerWeaponNo}
             onOpenTraitPicker={onOpenTraitPicker}
             onCloseTraitPicker={onCloseTraitPicker}
           />
         )}
-      </div>
+      </div>}
     </aside>
+  );
+}
+
+function SkillTreePanel({
+  state,
+  selectedSkillId,
+  onSelectSkill,
+  onUnlockSkill,
+  onEquipSkill,
+}: {
+  state: AdventureState;
+  selectedSkillId: string;
+  onSelectSkill: (skillId: string) => void;
+  onUnlockSkill: (skillId: string) => void;
+  onEquipSkill: (skillId: string, slot: number) => void;
+}) {
+  const selected = getSkill(selectedSkillId);
+  const unlocked = state.skills.unlockedIds.includes(selected.id);
+  const layout = useMemo(createSkillTreeLayout, []);
+  const [view, setView] = useState({ x: 24, y: 24, scale: 0.72 });
+  const [holdingId, setHoldingId] = useState<string>();
+  const [completedId, setCompletedId] = useState<string>();
+  const [rejectedId, setRejectedId] = useState<string>();
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const completeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const rejectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const panRef = useRef<{ pointerId: number; clientX: number; clientY: number; x: number; y: number } | undefined>(undefined);
+
+  useEffect(() => () => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
+    if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+  }, []);
+
+  const stopHold = () => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = undefined;
+    setHoldingId(undefined);
+  };
+
+  const rejectUnlock = (skillId: string) => {
+    setRejectedId(skillId);
+    if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+    rejectTimerRef.current = setTimeout(() => setRejectedId(undefined), 520);
+  };
+
+  const startNodeHold = (event: ReactPointerEvent<HTMLButtonElement>, skill: SkillNodeDefinition) => {
+    event.stopPropagation();
+    onSelectSkill(skill.id);
+    if (state.skills.unlockedIds.includes(skill.id)) return;
+    setHoldingId(skill.id);
+    holdTimerRef.current = setTimeout(() => {
+      const prerequisitesMet = prerequisitesMetFor(state, skill);
+      if (prerequisitesMet && state.skills.points >= skill.cost) {
+        onUnlockSkill(skill.id);
+        setCompletedId(skill.id);
+        if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
+        completeTimerRef.current = setTimeout(() => setCompletedId(undefined), 620);
+      } else rejectUnlock(skill.id);
+      setHoldingId(undefined);
+      holdTimerRef.current = undefined;
+    }, 680);
+  };
+
+  const beginPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panRef.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: view.x, y: view.y };
+  };
+
+  const movePan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    setView((current) => ({ ...current, x: pan.x + event.clientX - pan.clientX, y: pan.y + event.clientY - pan.clientY }));
+  };
+
+  const endPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (panRef.current?.pointerId === event.pointerId) panRef.current = undefined;
+  };
+
+  const zoomTree = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const cursorX = event.clientX - bounds.left;
+    const cursorY = event.clientY - bounds.top;
+    setView((current) => {
+      const scale = Math.max(0.25, Math.min(1.0, current.scale * Math.exp(-event.deltaY * 0.0012)));
+      const ratio = scale / current.scale;
+      return { scale, x: cursorX - (cursorX - current.x) * ratio, y: cursorY - (cursorY - current.y) * ratio };
+    });
+  };
+
+  const selectedPrerequisites = getSkillPrerequisites(selected);
+  return (
+    <div className="skill-tree-layout">
+      <section className="skill-tree-board" aria-label="Skill tree">
+        <div className="skill-tree-summary">
+          <span><Sparkles size={17} /> Available skill points</span>
+          <div className="skill-tree-tools">
+            <button type="button" onClick={() => setView({ x: 24, y: 24, scale: 0.72 })}>Reset</button>
+            <strong>{state.skills.points}</strong>
+          </div>
+        </div>
+        <div className="skill-tree-canvas" onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onWheel={zoomTree}>
+          <div className="skill-tree-world" style={{ width: layout.width, height: layout.height, transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
+            <svg className="skill-tree-links" width={layout.width} height={layout.height} aria-hidden="true">
+              {skillTreeDefinition.flatMap((skill) => getSkillPrerequisites(skill).map((requiredId) => {
+                const from = layout.positions.get(requiredId)!;
+                const to = layout.positions.get(skill.id)!;
+                const active = state.skills.unlockedIds.includes(requiredId) && state.skills.unlockedIds.includes(skill.id);
+                const progressing = holdingId === skill.id;
+                const completed = completedId === skill.id;
+                return <g key={`${requiredId}-${skill.id}`}>
+                  <line className="skill-link-base" x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+                  {(active || progressing || completed) && <line
+                    pathLength="1"
+                    className={`skill-link-progress ${active ? 'unlocked' : ''} ${progressing ? 'holding' : ''} ${completed ? 'completed' : ''}`}
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
+                  />}
+                </g>;
+              }))}
+            </svg>
+            {skillTreeDefinition.map((skill) => {
+              const position = layout.positions.get(skill.id)!;
+              const isUnlocked = state.skills.unlockedIds.includes(skill.id);
+              const available = prerequisitesMetFor(state, skill);
+              const assignedSlot = getAssignedSkillSlot(state, skill.id);
+              return <button
+                key={skill.id}
+                className={`skill-node ${skill.kind} ${isUnlocked ? 'unlocked' : available ? 'available' : 'locked'} ${selected.id === skill.id ? 'selected' : ''} ${holdingId === skill.id ? 'holding' : ''} ${completedId === skill.id ? 'completed' : ''} ${rejectedId === skill.id ? 'rejected' : ''}`}
+                style={{ '--skill-color': skill.color, left: position.x, top: position.y } as CSSProperties}
+                type="button"
+                onPointerDown={(event) => startNodeHold(event, skill)}
+                onPointerUp={stopHold}
+                onPointerLeave={stopHold}
+                onPointerCancel={stopHold}
+                onContextMenu={(event) => event.preventDefault()}
+                aria-label={`${skill.name || 'Skill tree origin'}, ${skill.kind}, ${isUnlocked ? 'unlocked' : available ? 'available' : 'locked'}`}
+              >
+                <span className="skill-node-core">
+                  <span className="skill-node-fill" />
+                  <span className="skill-node-icon">{skill.icon}</span>
+                </span>
+                {!isUnlocked && !available && <span className="skill-lock-overlay"><Lock size={14} /></span>}
+                {assignedSlot && <span className="skill-slot-badge">{assignedSlot}</span>}
+                {skill.name && <strong>{skill.name}</strong>}
+                <small className="skill-kind-tooltip">{skill.kind}</small>
+              </button>;
+            })}
+          </div>
+          <div className="skill-navigation-hint">
+            <MousePointer2 size={16} />
+            <span>Drag to pan · Wheel to zoom · Hold an available node to unlock</span>
+          </div>
+        </div>
+        <div className="skill-tree-legend">
+          <span><i className="passive" /> Passive stat bonus</span>
+          <span><i className="active" /> Active hotbar skill</span>
+          <span><i className="keystone" /> Keystone tradeoff</span>
+        </div>
+      </section>
+
+      <section className="skill-inspector">
+        <div className="skill-inspector-header">
+          <span style={{ color: selected.color }}>{selected.icon}</span>
+          <div><small>{selected.kind} skill</small>{selected.name && <h2>{selected.name}</h2>}</div>
+          <em>{selected.cost} SP</em>
+        </div>
+        {selected.description && <p>{selected.description}</p>}
+        {(selected.passive || selected.active) && <div className="skill-detail-card">
+          {selected.passive && <SkillPassiveDetails skill={selected} />}
+          {selected.active && <>
+            <AttributeRow icon="⏱" label="Cooldown" value={`${selected.active.cooldownMs / 1000}s`} />
+          </>}
+        </div>}
+        {selectedPrerequisites.length > 0 && <p className="skill-requirement">Requires {selectedPrerequisites.map((skillId) => getSkill(skillId).name).join(', ')}</p>}
+        <div className="skill-inspector-actions">
+          {!unlocked && <span className="skill-hold-hint">Press and hold the node to unlock</span>}
+          {unlocked && selected.kind !== 'active' && <span className="skill-unlocked-label">{selected.kind === 'keystone' ? 'Keystone active' : 'Passive active'}</span>}
+          {unlocked && selected.kind === 'active' && <div className="skill-slot-actions">
+            <span>Assign to shared hotbar</span>
+            <div>{[1, 2, 3, 4, 5].map((slot) => {
+              const entry = state.hotbarSlots[slot - 1];
+              const equipped = entry?.kind === 'skill' && entry.skillId === selected.id;
+              return <button className={equipped ? 'equipped' : undefined} key={slot} type="button" onClick={() => onEquipSkill(selected.id, slot)}>{slot}</button>;
+            })}</div>
+          </div>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function prerequisitesMetFor(state: AdventureState, skill: SkillNodeDefinition) {
+  return getSkillPrerequisites(skill).every((skillId) => state.skills.unlockedIds.includes(skillId));
+}
+
+function getAssignedSkillSlot(state: AdventureState, skillId: string) {
+  const slotIndex = state.hotbarSlots.findIndex((entry) => entry?.kind === 'skill' && entry.skillId === skillId);
+  return slotIndex >= 0 ? slotIndex + 1 : undefined;
+}
+
+function SkillPassiveDetails({ skill }: { skill: SkillNodeDefinition }) {
+  const passive = skill.passive;
+  if (!passive) return null;
+  return <>
+    {passive.maxHp !== undefined && <AttributeRow icon="♥" label="Max HP" value={`+${passive.maxHp}`} />}
+    {passive.moveSpeed !== undefined && <AttributeRow icon="👟" label="Movement speed" value={`+${passive.moveSpeed}`} />}
+    {passive.moveSpeedMultiplier !== undefined && <AttributeRow icon="➜" label="Movement speed" value={`×${passive.moveSpeedMultiplier}`} />}
+    {passive.damageMultiplier !== undefined && <AttributeRow icon="⚔" label="Weapon damage" value={`${Math.round((passive.damageMultiplier - 1) * 100)}%`} />}
+  </>;
+}
+
+function CharacterEditor({
+  state,
+  selectedItem,
+  onSelectItem,
+  onCustomize,
+}: {
+  state: AdventureState;
+  selectedItem: InventorySelection | undefined;
+  onSelectItem: (selection: InventorySelection | undefined) => void;
+  onCustomize: (changes: { body?: string; color?: string; pillWidth?: number }) => void;
+}) {
+  const faces = ['•̀_•́', '•_•', '´∀`', '¬_¬', '˘･з･', '*´∀`', '^_^', 'ಠ_ಠ'];
+  const outfit = getOutfit(state.character.outfitId);
+  const leftWeapon = getEquippedWeapon(state, 'left');
+  const rightWeapon = getEquippedWeapon(state, 'right');
+  const activeSkills = state.skills.unlockedIds
+    .map((skillId) => getSkill(skillId))
+    .filter((skill) => skill.kind === 'active');
+  return (
+    <section className="character-editor">
+      <h3>Character</h3>
+      <div className="character-preview character-editor-preview">
+        <PreviewWeaponSlot hand="L" weapon={leftWeapon} />
+        <div className="character-preview-minion">
+          {outfit.glyph && (
+            <span
+              className="character-preview-outfit"
+              style={{ color: outfit.color, transform: `translate(calc(-50% + ${outfit.offsetX ?? 0}px), calc(-50% + ${outfit.offsetY ?? 0}px))` }}
+            >
+              {outfit.glyph}
+            </span>
+          )}
+          <strong style={{ background: state.character.color, width: state.character.pillWidth }}>{state.character.body}</strong>
+        </div>
+        <PreviewWeaponSlot hand="R" weapon={rightWeapon} />
+      </div>
+      <section className="character-section character-skills">
+        <h3>Skills</h3>
+        <div className="character-skill-grid">
+          {activeSkills.map((skill) => {
+            const assignedSlot = getAssignedSkillSlot(state, skill.id);
+            return <button
+              className={`character-skill-slot active ${selectedItem?.kind === 'skill' && selectedItem.skillId === skill.id ? 'selected' : ''}`}
+              key={skill.id}
+              type="button"
+              title={`${skill.name}: ${skill.description}`}
+              style={{ '--skill-color': skill.color } as CSSProperties}
+              onClick={() => onSelectItem({ kind: 'skill', skillId: skill.id })}
+            >
+              {skill.icon}
+              {assignedSlot && <span className="skill-slot-badge">{assignedSlot}</span>}
+            </button>;
+          })}
+          {activeSkills.length === 0 && <span className="character-skills-empty">No active skills unlocked</span>}
+        </div>
+      </section>
+      <section className="character-section">
+        <h3>Kaomoji</h3>
+        <div className="character-choice-grid">
+          {faces.map((body) => <button className={state.character.body === body ? 'selected' : ''} key={body} type="button" onClick={() => onCustomize({ body })}>{body}</button>)}
+        </div>
+      </section>
+      <section className="character-section">
+        <label className="character-color-picker">Body color<input aria-label="Character RGB color" type="color" value={state.character.color} onChange={(event) => onCustomize({ color: event.target.value })} /></label>
+      </section>
+      <section className="character-section">
+        <label className="character-width-control">Body width <strong>{state.character.pillWidth}</strong><input type="range" min="45" max="70" value={state.character.pillWidth} onChange={(event) => onCustomize({ pillWidth: Number(event.target.value) })} /></label>
+      </section>
+      <InventoryGroup title="Outfits">
+        {outfitDefinitions.map((option) => (
+          <button
+            className={`inventory-slot outfit-inventory-slot ${selectedItem?.kind === 'outfit' && selectedItem.outfitId === option.id ? 'selected' : ''}`}
+            key={option.id}
+            type="button"
+            onClick={() => onSelectItem({ kind: 'outfit', outfitId: option.id })}
+            title={option.name}
+          >
+            <span className="slot-icon" style={{ color: option.color }}>{option.glyph ?? '·'}</span>
+            {state.character.outfitId === option.id && <span className="equipped-mark right">E</span>}
+          </button>
+        ))}
+      </InventoryGroup>
+    </section>
+  );
+}
+
+function PreviewWeaponSlot({ hand, weapon }: { hand: 'L' | 'R'; weapon: EffectiveWeapon | undefined }) {
+  return (
+    <span className="character-preview-weapon" title={weapon?.name ?? 'Bare Fist'}>
+      <small>{hand}</small>
+      <strong style={{ color: weapon?.color }}>{weapon?.projectile?.glyph ?? weapon?.handGlyph ?? 'ง'}</strong>
+    </span>
   );
 }
 
@@ -596,6 +951,9 @@ function ItemInspector({
   onApplyTrait,
   onRemoveTrait,
   onUse,
+  onEquipItem,
+  onEquipSkill,
+  onEquipOutfit,
   onDispose,
   traitPickerWeaponNo,
   onOpenTraitPicker,
@@ -608,11 +966,77 @@ function ItemInspector({
   onApplyTrait: (traitId: string, weaponInstanceId: string) => void;
   onRemoveTrait: (weaponInstanceId: string, index: number) => void;
   onUse: (itemNo: number) => void;
-  onDispose: (kind: InventorySelection['kind'], itemNo: number) => void;
+  onEquipItem: (itemNo: number, slot: number) => void;
+  onEquipSkill: (skillId: string, slot: number) => void;
+  onEquipOutfit: (outfitId: string) => void;
+  onDispose: (kind: InventoryItemKind, itemNo: number) => void;
   traitPickerWeaponNo: number | undefined;
   onOpenTraitPicker: (weaponItemNo: number) => void;
   onCloseTraitPicker: () => void;
 }) {
+
+  if (selection.kind === 'skill') {
+    const skill = getSkill(selection.skillId);
+    return (
+      <section className="item-inspector skill-item-inspector">
+        <div className="inspector-header">
+          <span style={{ color: skill.color }}>{skill.icon}</span>
+          <div><h3>{skill.name}</h3><p>Active skill</p></div>
+        </div>
+        <div className="inspector-scroll">
+          <p>{skill.description}</p>
+          {skill.active && <div className="skill-detail-card">
+            <AttributeRow icon="⏱" label="Cooldown" value={`${skill.active.cooldownMs / 1000}s`} />
+          </div>}
+        </div>
+        <div className="skill-slot-actions">
+          <span>Assign to shared hotbar</span>
+          <div>{[1, 2, 3, 4, 5].map((slot) => {
+            const entry = state.hotbarSlots[slot - 1];
+            const equipped = entry?.kind === 'skill' && entry.skillId === skill.id;
+            return <button className={equipped ? 'equipped' : undefined} key={slot} type="button" onClick={() => onEquipSkill(skill.id, slot)}>{slot}</button>;
+          })}</div>
+        </div>
+      </section>
+    );
+  }
+
+  if (selection.kind === 'outfit') {
+    const outfit = getOutfit(selection.outfitId);
+    const equipped = state.character.outfitId === outfit.id;
+    return (
+      <section className="item-inspector outfit-inspector">
+        <div className="inspector-header">
+          <span style={{ color: outfit.color }}>{outfit.glyph ?? '·'}</span>
+          <div><h3>{outfit.name}</h3><p>Outfit</p></div>
+        </div>
+        <div className="inspector-scroll">
+          <div className="character-preview compact">
+            {outfit.glyph && (
+              <span
+                className="character-preview-outfit"
+                style={{ color: outfit.color, transform: `translate(calc(-50% + ${outfit.offsetX ?? 0}px), calc(-50% + ${outfit.offsetY ?? 0}px))` }}
+              >
+                {outfit.glyph}
+              </span>
+            )}
+            <strong style={{ background: state.character.color, width: state.character.pillWidth }}>{state.character.body}</strong>
+          </div>
+          <p>{outfit.description}</p>
+          <div className="attribute-list">
+            {outfit.maxHpBonus && <AttributeRow icon="♥" label="Max HP" value={`+${outfit.maxHpBonus}`} />}
+            {outfit.speedBonus && <AttributeRow icon="👟" label="Speed" value={`+${outfit.speedBonus}`} />}
+            {outfit.damageBonus && <AttributeRow icon="⚔️" label="Damage" value={`+${outfit.damageBonus}`} />}
+            {!outfit.maxHpBonus && !outfit.speedBonus && !outfit.damageBonus && <p>No stat bonus.</p>}
+          </div>
+        </div>
+        <div className="inspector-actions">
+          <button className={equipped ? 'equipped' : undefined} type="button" onClick={() => onEquipOutfit(outfit.id)}>{equipped ? 'Equipped' : 'Equip Outfit'}</button>
+        </div>
+      </section>
+    );
+  }
+
   if (selection.kind === 'weapon') {
     const weapon = state.inventory.weapons.find((item) => item.itemNo === selection.itemNo);
     if (!weapon) return null;
@@ -718,9 +1142,24 @@ function ItemInspector({
           <StatPill label="Count" value={potion.count} />
         </div>
       </div>
-      <div className="inspector-actions">
-        <button type="button" onClick={() => onUse(potion.itemNo)}>Use</button>
-        <DisposeButton onDispose={() => onDispose('potion', potion.itemNo)} />
+      <div className="potion-actions">
+        <div className="potion-primary-actions">
+          <button type="button" onClick={() => onUse(potion.itemNo)}>Use</button>
+          <DisposeButton onDispose={() => onDispose('potion', potion.itemNo)} />
+        </div>
+        <div className="potion-equip-actions">
+          {[1, 2, 3, 4, 5].map((slot) => {
+            const entry = state.hotbarSlots[slot - 1];
+            return <button
+              key={slot}
+              type="button"
+              className={entry?.kind === 'potion' && entry.itemNo === potion.itemNo ? 'equipped' : undefined}
+              onClick={() => onEquipItem(potion.itemNo, slot)}
+            >
+              Equip {slot}
+            </button>;
+          })}
+        </div>
       </div>
     </section>
   );
@@ -740,7 +1179,7 @@ function StonePicker({
   return (
     <div className="stone-picker">
       <div className="stone-picker-heading">
-        <strong>Imprint</strong>
+        <strong>Augmentation</strong>
         <button type="button" onClick={onClose} aria-label="Close stone picker">×</button>
       </div>
       <div className="stone-picker-grid">
@@ -790,12 +1229,21 @@ function formatStatBonus(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-function getCharacterStatus(leftWeapon: EffectiveWeapon | undefined, rightWeapon: EffectiveWeapon | undefined) {
+
+function getCharacterStatus(leftWeapon: EffectiveWeapon | undefined, rightWeapon: EffectiveWeapon | undefined, state: AdventureState) {
   const weapons = [leftWeapon, rightWeapon].filter((weapon): weapon is EffectiveWeapon => Boolean(weapon));
+  const outfit = getOutfit(state.character.outfitId);
+  const skills = getPassiveSkillModifiers(state.skills.unlockedIds);
+  const activeHaste = state.skills.hasteUntil > performance.now()
+    ? state.skills.unlockedIds.reduce((bonus, skillId) => {
+      const effect = getSkill(skillId).active?.effect;
+      return effect?.kind === 'haste' ? Math.max(bonus, effect.speedBonus) : bonus;
+    }, 0)
+    : 0;
   return {
-    attack: weapons.reduce((value, weapon) => value + weapon.damage, 0),
+    attack: Math.ceil(weapons.reduce((value, weapon) => value + weapon.damage + (outfit.damageBonus ?? 0), 0) * skills.damageMultiplier),
     defense: 0,
-    speed: PLAYER_MOVE_SPEED,
+    speed: Math.round((PLAYER_MOVE_SPEED + (outfit.speedBonus ?? 0) + skills.moveSpeed + activeHaste) * skills.moveSpeedMultiplier),
     rate: formatStatBonus(weapons.reduce((value, weapon) => value + weapon.attackSpeed, 0)),
     range: weapons.length ? Math.max(...weapons.map((weapon) => weapon.range)) : 0,
     radius: weapons.length ? Math.max(...weapons.map((weapon) => weapon.radius)) : 0,
@@ -810,6 +1258,62 @@ function StatusLine({ icon, label, value }: { icon: string; label: string; value
       <strong>{value}</strong>
     </span>
   );
+}
+
+type CombatTargetDisplay =
+  | { kind: 'enemy'; name: string; hp: number; maxHp: number; attack: number; speed: number; attackSpeed: number; range: number; aggro: number }
+  | { kind: 'prop'; name: string; hp: number; maxHp: number };
+
+function getCombatTarget(state: AdventureState): CombatTargetDisplay | undefined {
+  if (!state.combatTarget) return undefined;
+  if (state.combatTarget.kind === 'enemy') {
+    const enemy = state.enemies.find((candidate) => candidate.id === state.combatTarget?.id);
+    return enemy ? {
+      kind: 'enemy',
+      name: enemy.name,
+      hp: enemy.hp,
+      maxHp: enemy.maxHp,
+      attack: enemy.attack,
+      speed: Math.round(enemy.speed),
+      attackSpeed: enemy.attackSpeed,
+      range: Math.round(enemy.attackRange),
+      aggro: Math.round(enemy.aggroRadius),
+    } : undefined;
+  }
+  const object = state.worldObjects.find((candidate) => candidate.id === state.combatTarget?.id);
+  return object?.hp !== undefined && object.maxHp !== undefined ? {
+    kind: 'prop',
+    name: formatTargetName(object.kind),
+    hp: object.hp,
+    maxHp: object.maxHp,
+  } : undefined;
+}
+
+function CombatTargetPanel({ target }: { target: CombatTargetDisplay }) {
+  return (
+    <div className="adventure-target-panel" aria-label="Combat target">
+      <div className="target-heading">
+        <Crosshair size={18} />
+        <span>{target.name}</span>
+        <strong>{Math.ceil(target.hp)} / {target.maxHp}</strong>
+      </div>
+      <div className="adventure-bar"><span style={{ width: `${Math.max(0, target.hp / target.maxHp) * 100}%` }} /></div>
+      {target.kind === 'enemy' && (
+        <div className="target-stat-grid">
+          <StatusLine icon="⚔️" label="ATK" value={target.attack} />
+          <StatusLine icon="🛡️" label="DEF" value={0} />
+          <StatusLine icon="👟" label="SPD" value={target.speed} />
+          <StatusLine icon="⏱️" label="RATE" value={`${target.attackSpeed}/s`} />
+          <StatusLine icon="↔️" label="RNG" value={target.range} />
+          <StatusLine icon="◉" label="AGGRO" value={target.aggro} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatTargetName(kind: string) {
+  return kind.split('-').map((part) => part[0].toUpperCase() + part.slice(1)).join(' ');
 }
 
 function StoneIcon({ trait, size = 'slot' }: { trait: TraitDefinition; size?: 'slot' | 'socket' | 'picker' | 'header' }) {
@@ -876,352 +1380,5 @@ function DisposeButton({ disabled, onDispose }: { disabled?: boolean; onDispose:
   );
 }
 
-function drawScene(canvas: HTMLCanvasElement, camera: Camera, state: AdventureState, aim: { x: number; y: number }, hoverHand: HandSlot | undefined, now: number) {
-  const rect = canvas.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
-  const width = Math.max(1, Math.floor(rect.width * ratio));
-  const height = Math.max(1, Math.floor(rect.height * ratio));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  ctx.clearRect(0, 0, rect.width, rect.height);
-
-  ctx.fillStyle = '#91b975';
-  ctx.fillRect(0, 0, rect.width, rect.height);
-
-  ctx.save();
-  ctx.scale(camera.zoom, camera.zoom);
-  ctx.translate(-camera.x, -camera.y);
-  drawMap(ctx);
-  if (hoverHand) drawWeaponRange(ctx, state, hoverHand);
-  drawAimCursor(ctx, aim);
-  for (const enemy of state.enemies) drawEnemy(ctx, enemy, now);
-  drawPlayer(ctx, state, now);
-  for (const projectile of state.projectiles) drawProjectile(ctx, projectile);
-  for (const effect of state.effects) drawEffect(ctx, effect, now);
-  ctx.restore();
-}
-
-function drawMap(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = '#b7d889';
-  ctx.fillRect(0, 0, adventureWorld.width, adventureWorld.height);
-  ctx.strokeStyle = 'rgba(74, 107, 61, 0.16)';
-  ctx.lineWidth = 2;
-  for (let x = 0; x < adventureWorld.width; x += GAME_SETTINGS.map.gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, adventureWorld.height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < adventureWorld.height; y += GAME_SETTINGS.map.gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(adventureWorld.width, y);
-    ctx.stroke();
-  }
-  for (const prop of adventureWorld.terrainProps) {
-    drawTerrainProp(ctx, prop.kind, prop.x, prop.y, prop.size, prop.rotation);
-  }
-}
-
-function drawTerrainProp(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, size: number, rotation: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rotation);
-  ctx.scale(size, size);
-  if (kind === 'tree') {
-    ctx.fillStyle = 'rgba(49, 113, 56, 0.28)';
-    ctx.beginPath();
-    ctx.ellipse(0, 3, 22, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#5f8e3f';
-    ctx.beginPath();
-    ctx.arc(-8, -6, 13, 0, Math.PI * 2);
-    ctx.arc(8, -7, 15, 0, Math.PI * 2);
-    ctx.arc(0, -18, 13, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (kind === 'rock') {
-    ctx.fillStyle = '#8f9187';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 16, 11, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (kind === 'flower') {
-    ctx.fillStyle = '#d95f91';
-    for (let i = 0; i < 5; i += 1) {
-      ctx.beginPath();
-      ctx.arc(Math.cos(i * 1.26) * 7, Math.sin(i * 1.26) * 7, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#f3d64f';
-    ctx.beginPath();
-    ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (kind === 'mushroom') {
-    ctx.fillStyle = '#f4ead1';
-    ctx.fillRect(-4, -2, 8, 13);
-    ctx.fillStyle = '#c94d5d';
-    ctx.beginPath();
-    ctx.arc(0, -4, 12, Math.PI, 0);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = '#8a6740';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 12, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawPlayer(ctx: CanvasRenderingContext2D, state: AdventureState, now: number) {
-  const leftWeapon = getEquippedWeapon(state, 'left');
-  const rightWeapon = getEquippedWeapon(state, 'right');
-  const leftReady = now >= state.cooldownReadyAt.left;
-  const rightReady = now >= state.cooldownReadyAt.right;
-  drawKaomoji(ctx, {
-    x: state.player.x,
-    y: state.player.y,
-    facing: state.player.facing,
-    body: state.character.body,
-    leftHand: getVisibleHandGlyph(leftWeapon, leftReady),
-    rightHand: getVisibleHandGlyph(rightWeapon, rightReady),
-    color: state.character.color,
-    pillWidth: state.character.pillWidth,
-    stroke: '#4777bd',
-    selected: true,
-    wobble: Math.sin(now / 220) * 1.1,
-  });
-  drawHpBar(ctx, state.player.x - 36, state.player.y + 31, 72, 8, state.player.hp / state.player.maxHp, '#4777bd');
-}
-
-function drawEnemy(ctx: CanvasRenderingContext2D, enemy: Actor, now: number) {
-  if (enemy.hp <= 0) return;
-  drawKaomoji(ctx, {
-    x: enemy.x,
-    y: enemy.y,
-    facing: enemy.facing,
-    body: 'x_x',
-    leftHand: '|',
-    rightHand: '|',
-    color: '#f2d6c7',
-    pillWidth: 78,
-    stroke: '#bb3f4d',
-    selected: false,
-    wobble: Math.sin(now / 380 + enemy.x) * 0.8,
-  });
-  ctx.save();
-  ctx.fillStyle = '#493542';
-  ctx.font = '800 18px "Segoe UI", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(enemy.name, enemy.x, enemy.y - 48);
-  drawHpBar(ctx, enemy.x - 48, enemy.y + 32, 96, 9, enemy.hp / enemy.maxHp, '#d94f5f');
-  ctx.restore();
-}
-
-function drawKaomoji(
-  ctx: CanvasRenderingContext2D,
-  unit: {
-    x: number;
-    y: number;
-    facing: 'left' | 'right';
-    body: string;
-    leftHand?: string;
-    rightHand?: string;
-    color: string;
-    pillWidth: number;
-    stroke: string;
-    selected: boolean;
-    wobble: number;
-  },
-) {
-  ctx.save();
-  ctx.translate(unit.x, unit.y);
-  ctx.fillStyle = 'rgba(40, 52, 42, 0.28)';
-  ctx.beginPath();
-  ctx.ellipse(0, 23, unit.pillWidth / 2, 8, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = unit.color;
-  ctx.strokeStyle = unit.stroke;
-  ctx.lineWidth = unit.selected ? 4 : 2;
-  ctx.beginPath();
-  ctx.roundRect(-unit.pillWidth / 2, -unitBodyHeight / 2, unit.pillWidth, unitBodyHeight, unitBodyHeight / 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.save();
-  if (unit.facing === 'left') ctx.scale(-1, 1);
-  ctx.translate(0, unit.wobble);
-  ctx.font = `${unitBodyFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#182033';
-  ctx.shadowColor = 'rgba(255,255,255,0.85)';
-  ctx.shadowBlur = 4;
-  ctx.fillText(unit.body, 0, 0);
-  ctx.font = `${unitHandFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
-  if (unit.leftHand) {
-    ctx.textAlign = 'right';
-    ctx.fillText(unit.leftHand, -unit.pillWidth / 2 - unitHandGap, 0);
-  }
-  if (unit.rightHand) {
-    ctx.textAlign = 'left';
-    ctx.fillText(unit.rightHand, unit.pillWidth / 2 + unitHandGap, 0);
-  }
-  ctx.restore();
-  ctx.restore();
-}
-
-function drawProjectile(ctx: CanvasRenderingContext2D, projectile: Projectile) {
-  ctx.save();
-  ctx.translate(projectile.x, projectile.y);
-  ctx.fillStyle = projectile.color;
-  ctx.shadowColor = projectile.color;
-  ctx.shadowBlur = 8;
-  ctx.font = '700 31px "Segoe UI Symbol", "Segoe UI Emoji", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(projectile.glyph, 0, 0);
-  ctx.restore();
-}
-
-function drawEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: number) {
-  if (now < effect.born) return;
-  if (effect.kind === 'death') {
-    drawDeathEffect(ctx, effect, now);
-    return;
-  }
-  const life = effect.kind === 'damage' ? 950 : 420;
-  const t = Math.min(1, (now - effect.born) / life);
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  if (effect.kind === 'damage') {
-    ctx.globalAlpha = 1 - Math.max(0, t - 0.72) / 0.28;
-    ctx.fillStyle = effect.color;
-    ctx.font = '900 25px "Segoe UI", sans-serif';
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
-    const y = effect.y - 48 - t * 54;
-    ctx.strokeText(effect.glyph, effect.x, y);
-    ctx.fillText(effect.glyph, effect.x, y);
-  } else {
-    const pulse = Math.sin(t * Math.PI);
-    ctx.globalAlpha = 1 - Math.max(0, t - 0.72) / 0.28;
-    ctx.fillStyle = effect.color;
-    ctx.font = `${Math.round((effect.size ?? 42) + pulse * 10)}px "Segoe UI Emoji", "Segoe UI Symbol", sans-serif`;
-    ctx.fillText(effect.glyph, effect.x, effect.y);
-  }
-  ctx.restore();
-}
-
-function drawDeathEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: number) {
-  const t = Math.min(1, (now - effect.born) / 1250);
-  const drift = 1 - Math.pow(1 - t, 2);
-  const x = effect.x + ((effect.toX ?? effect.x) - effect.x) * drift;
-  const y = effect.y - Math.sin(t * Math.PI) * 128 + Math.pow(t, 2.35) * 270;
-  const spin = (effect.team === 'enemy' ? 1 : -1) * t * Math.PI * 1.8;
-
-  ctx.save();
-  ctx.globalAlpha = 1 - Math.max(0, t - 0.72) / 0.28;
-  drawFxKaomoji(ctx, effect, x, y, spin);
-  ctx.restore();
-}
-
-function drawFxKaomoji(ctx: CanvasRenderingContext2D, effect: CombatEffect, x: number, y: number, rotation: number) {
-  const body = effect.body ?? effect.glyph;
-  const bodyWidth = effect.pillWidth ?? 76;
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rotation);
-  ctx.fillStyle = effect.background ?? '#dcecff';
-  ctx.strokeStyle = effect.team === 'enemy' ? '#bb3f4d' : '#4777bd';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(-bodyWidth / 2, -unitBodyHeight / 2, bodyWidth, unitBodyHeight, unitBodyHeight / 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.font = `${unitBodyFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#182033';
-  ctx.shadowColor = 'rgba(255,255,255,0.85)';
-  ctx.shadowBlur = 4;
-  ctx.fillText(body, 0, 0);
-  ctx.font = `${unitHandFont}px "Trebuchet MS", "Segoe UI", sans-serif`;
-  if (effect.leftHand) {
-    ctx.textAlign = 'right';
-    ctx.fillText(effect.leftHand, -bodyWidth / 2 - unitHandGap, 0);
-  }
-  if (effect.rightHand) {
-    ctx.textAlign = 'left';
-    ctx.fillText(effect.rightHand, bodyWidth / 2 + unitHandGap, 0);
-  }
-  ctx.restore();
-}
-
-function drawWeaponRange(ctx: CanvasRenderingContext2D, state: AdventureState, hand: HandSlot) {
-  const weapon = getEquippedWeapon(state, hand);
-  if (!weapon) return;
-  ctx.save();
-  ctx.strokeStyle = weapon.color;
-  ctx.globalAlpha = 0.36;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(state.player.x, state.player.y, weapon.range, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 0.08;
-  ctx.fillStyle = weapon.color;
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawAimCursor(ctx: CanvasRenderingContext2D, aim: { x: number; y: number }) {
-  ctx.save();
-  ctx.fillStyle = '#f4b23f';
-  ctx.font = '700 24px "Segoe UI Symbol", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('⌖', aim.x, aim.y);
-  ctx.restore();
-}
-
-function getVisibleHandGlyph(weapon: EffectiveWeapon | undefined, ready: boolean) {
-  if (!weapon) return '╯';
-  if (ready || weapon.kind === 'melee') return weapon.handGlyph;
-  return weapon.bareHandGlyph ?? '╯';
-}
-
-function drawHpBar(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, ratio: number, color: string) {
-  ctx.fillStyle = '#2f2630';
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, height, height / 2);
-  ctx.fill();
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(x + 1, y + 1, Math.max(0, width - 2) * Math.max(0, Math.min(1, ratio)), height - 2, height / 2);
-  ctx.fill();
-}
-
-function syncCamera(camera: Camera, player: Actor, canvas: HTMLCanvasElement) {
-  const rect = canvas.getBoundingClientRect();
-  camera.x = clamp(player.x - rect.width / camera.zoom / 2, -GAME_SETTINGS.map.cameraOverscroll, adventureWorld.width - rect.width / camera.zoom + GAME_SETTINGS.map.cameraOverscroll);
-  camera.y = clamp(player.y - rect.height / camera.zoom / 2, -GAME_SETTINGS.map.cameraOverscroll, adventureWorld.height - rect.height / camera.zoom + GAME_SETTINGS.map.cameraOverscroll);
-}
-
-function screenToWorld(canvas: HTMLCanvasElement, camera: Camera, clientX: number, clientY: number) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (clientX - rect.left) / camera.zoom + camera.x,
-    y: (clientY - rect.top) / camera.zoom + camera.y,
-  };
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
 
 export const adventureWeapons = weaponDefinitions;

@@ -78,7 +78,7 @@ function withSource(tech: TechnologyJson, source: ContentSource): TechnologyDefi
 }
 
 export const technologySchemaExample: TechnologyJson = {
-  id: 'custom-coin-song',
+  id: 'custom-technology-01',
   name: 'Coin Song',
   icon: '🎼',
   description: 'Money button gains +3 per click.',

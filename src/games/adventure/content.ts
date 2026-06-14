@@ -7,7 +7,7 @@ export type WeaponDefinition = {
   id: string;
   name: string;
   handGlyph: string;
-  bareHandGlyph?: string;
+  activeGlyph?: string;
   kind: WeaponKind;
   description: string;
   damage: number;
@@ -52,6 +52,9 @@ function validateWeapon(input: unknown): WeaponDefinition {
   if (weapon.kind === 'projectile' && (!weapon.projectile?.glyph || typeof weapon.projectile.speed !== 'number')) {
     throw new Error(`Projectile weapon ${weapon.id} requires projectile glyph and speed.`);
   }
+  if ((weapon.handGlyph.includes('{p}') || weapon.activeGlyph?.includes('{p}')) && !weapon.projectile?.glyph) {
+    throw new Error(`Weapon ${weapon.id} uses {p} but has no projectile glyph.`);
+  }
   const damage = weapon.damage!;
   const range = weapon.range!;
   const radius = weapon.radius!;
@@ -61,7 +64,7 @@ function validateWeapon(input: unknown): WeaponDefinition {
     id: weapon.id,
     name: weapon.name,
     handGlyph: weapon.handGlyph,
-    bareHandGlyph: weapon.bareHandGlyph,
+    activeGlyph: weapon.activeGlyph,
     kind: weapon.kind,
     description: weapon.description ?? '',
     damage,

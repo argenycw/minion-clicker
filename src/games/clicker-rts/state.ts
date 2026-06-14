@@ -1,5 +1,6 @@
 import { GAME_SETTINGS, WORLD_HEIGHT, WORLD_WIDTH } from '../../shared/settings';
 import { castleDefinitions, getUnit, terrainProps, unitDefinitions, type CastleDefenderDefinition } from '../../shared/content';
+import { getClosestBorderPoint } from '../../shared/combatPresentation';
 import { technologies } from './technology';
 
 export type Team = 'player' | 'enemy';
@@ -199,7 +200,7 @@ export const createInitialState = (): GameState => {
     combatEvents: enemyUnits.map(makeSpawnEvent),
     projectiles: [],
     mapPings: [],
-    mapSeed: 7,
+    mapSeed: Math.floor(Math.random() * 1_000_000_000),
     startedAt,
     totalMinionsSpawned: 0,
   };
@@ -911,7 +912,7 @@ function makeProjectile(attacker: UnitEntity, target: UnitEntity | CastleEntity,
     glyph: definition.projectile?.glyph ?? '!',
     color: definition.projectile?.color ?? '#f0a729',
     radius: definition.projectileRadius,
-    impactGlyph: definition.projectile?.impact?.glyph,
+    impactGlyph: definition.projectile?.impact?.glyph ?? '💥',
     impactColor: definition.projectile?.impact?.color ?? definition.projectile?.color,
     targetId: target.id,
   };
@@ -1009,13 +1010,14 @@ function makeCombatEvent(
   glyph: string,
   color: string,
 ): CombatEvent {
+  const impact = getClosestBorderPoint(attacker, target, 'defId' in target ? 30 : 58);
   return {
     id: performance.now() + Math.random(),
     kind: 'impact',
     fromX: attacker.x,
     fromY: attacker.y,
-    toX: target.x,
-    toY: target.y,
+    toX: impact.x,
+    toY: impact.y,
     glyph,
     color,
     text: `-${Math.floor(damage)}`,
