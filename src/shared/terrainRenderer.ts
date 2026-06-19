@@ -13,6 +13,8 @@ export type TerrainVisual = {
   hitAt?: number;
 };
 
+const pseudoCache = new Map<string, number>();
+
 export function drawTerrainGround(ctx: CanvasRenderingContext2D, width: number, height: number) {
   ctx.fillStyle = '#acd27d';
   ctx.fillRect(0, 0, width, height);
@@ -429,8 +431,13 @@ function traceBush(ctx: CanvasRenderingContext2D) {
 }
 
 function pseudo(id: string, salt: number) {
+  const key = `${id}:${salt}`;
+  const cached = pseudoCache.get(key);
+  if (cached !== undefined) return cached;
   let seed = salt * 97;
   for (let index = 0; index < id.length; index += 1) seed = (seed * 31 + id.charCodeAt(index)) | 0;
   const value = Math.sin(seed * 0.001) * 10000;
-  return value - Math.floor(value);
+  const result = value - Math.floor(value);
+  pseudoCache.set(key, result);
+  return result;
 }

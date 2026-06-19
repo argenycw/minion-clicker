@@ -91,6 +91,20 @@ The procedural world is organized around biome definitions under `src/games/adve
 
 Biome geography is generated as a low-frequency continuous field. A biome therefore covers a broad region made from many gameplay grid cells, while each generation tile stores a blend value for rendering and a dominant biome id for content selection. Ground colors interpolate across a wide transition band so neighboring regions fade into one another without checkerboard placement or hard rectangular borders.
 
+The Adventure map is streamed as deterministic `1920 × 1920` world chunks. The player has no world-edge clamp; crossing a chunk boundary shifts a loaded `3 × 3` window around the current chunk. Terrain, props, enemies, and procedural ruins are pure results of the map seed and signed chunk coordinates, so revisiting a coordinate regenerates the same base content. Biome noise samples absolute world coordinates, which keeps terrain continuous across chunk borders and supports negative coordinates.
+
+Unloaded chunks retain compact runtime changes rather than their complete generated contents. Prop HP, enemy HP, and uncollected drops are recorded by chunk and reapplied when that chunk is loaded again. Authored areas such as `area-01` and `area-02` participate in the same stream, while procedural entities use deterministic type-plus-number IDs derived from their owning chunk and local numeric index.
+
+## Dungeon Locations
+
+Adventure chunks can contain non-destructible dungeon locations. The first implemented location is `location-01`, an Echoing Cave near the starting area, and streamed chunks can also generate deterministic Cave locations. Approaching a location displays an `E` interaction prompt. Entering freezes the current overworld arrays and player position; leaving through the dungeon exit restores that exact overworld state while keeping inventory, coins, HP, and other character progression earned inside.
+
+Dungeon types are data-driven definitions under `src/games/adventure/dungeons`. `dungeon-01` defines the Cave room-count range, room dimensions, enemy candidates, enemies per room, chest chance, chest rolls, weighted item pool, coin rewards, and floor palette. Castle, Tower, and Mountain dungeons can use the same definition and transition system with new stable IDs and generators or visual themes.
+
+The Cave generator builds a connected graph of rectangular rooms on a coarse grid. Every room after the entrance chooses an existing room as its parent, and a wide rectangular corridor joins the two centers. This guarantees that every generated room is reachable while allowing branches and irregular layouts. The entrance room contains the exit, later rooms contain enemies, and the first connected room always teaches the chest interaction with a guaranteed chest.
+
+Chests use vector rendering so open and closed states remain consistent across platforms. Pressing `E` near a closed chest opens it once and scatters several deterministic loot rolls around the chest, outside the player's collision radius. Each roll creates at most one consolidated coin drop and one rarity-colored item drop, making the rewards readable before normal proximity collection begins.
+
 Adventure enemy definitions live under `src/games/adventure/enemies`. They currently adapt the shared minion catalog into adventure-specific HP, movement, attack, appearance, and aggro values. Placement is deterministic, keeps the spawn area clear, and gives each enemy a home point to return to after the player leaves its aggro radius.
 
 `App.tsx` is limited to React UI and runtime wiring. Camera input, state reduction, world generation, enemy generation, and canvas scene rendering are separate modules so each procedural system can evolve independently.

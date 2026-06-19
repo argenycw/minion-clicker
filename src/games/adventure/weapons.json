@@ -2,6 +2,7 @@
   {
     "id": "melee-00",
     "name": "Bare Fist",
+    "rank": "D",
     "handGlyph": "ง",
     "activeGlyph": "⇀",
     "kind": "melee",
@@ -17,6 +18,7 @@
   {
     "id": "melee-01",
     "name": "Punch",
+    "rank": "C",
     "handGlyph": "Ͻ",
     "activeGlyph": "Ͻ",
     "kind": "melee",
@@ -32,6 +34,7 @@
   {
     "id": "melee-02",
     "name": "Claw",
+    "rank": "B",
     "handGlyph": "ミ",
     "activeGlyph": "ミ",
     "kind": "melee",
@@ -49,6 +52,7 @@
   {
     "id": "ranged-01",
     "name": "Spark",
+    "rank": "C",
     "handGlyph": "-{p}",
     "activeGlyph": "╯",
     "kind": "projectile",
@@ -68,6 +72,7 @@
   {
     "id": "ranged-02",
     "name": "Heart Tether",
+    "rank": "B",
     "handGlyph": "~{p}",
     "activeGlyph": "~",
     "kind": "projectile",

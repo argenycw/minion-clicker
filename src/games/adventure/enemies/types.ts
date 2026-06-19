@@ -1,4 +1,5 @@
 import type { Facing } from '../state';
+import type { LootTable } from '../loot';
 
 export type AdventureEnemyDefinition = {
   id: string;
@@ -17,10 +18,12 @@ export type AdventureEnemyDefinition = {
   attackSpeed: number;
   attackRange: number;
   aggroRadius: number;
+  loot?: LootTable;
 };
 
 export type AdventureEnemy = {
   id: string;
+  chunkKey?: string;
   defId: string;
   name: string;
   x: number;
@@ -46,4 +49,5 @@ export type AdventureEnemy = {
   aggroRadius: number;
   attackReadyAt: number;
   invulnerable?: boolean;
+  loot?: LootTable;
 };

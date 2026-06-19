@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from 'react';
-import { Backpack, Crosshair, FlaskConical, HeartPulse, Lock, MousePointer2, Sparkles, Swords } from 'lucide-react';
+import { Backpack, Crosshair, FlaskConical, HeartPulse, Lock, MousePointer2, Settings, Sparkles, Swords } from 'lucide-react';
 import { getTrait, weaponDefinitions, type TraitDefinition } from './content';
 import {
   applyTraitToWeaponByItemNo,
@@ -7,6 +7,7 @@ import {
   createInitialAdventureState,
   getEffectiveWeapon,
   getEquippedWeapon,
+  getAdventureInteractionPrompt,
   PLAYER_MOVE_SPEED,
   type AdventureState,
   type EffectiveWeapon,
@@ -14,11 +15,17 @@ import {
 } from './state';
 import { bindAdventureCameraZoom, createAdventureCamera, followPlayerCamera, screenToWorld, type AdventureCamera } from './camera';
 import { adventureReducer } from './reducer';
+import { keysToAdventureInputCommand } from './commands';
 import { drawScene } from './sceneRenderer';
 import { getOutfit, outfitDefinitions } from './outfits';
 import { createSkillTreeLayout, getPassiveSkillModifiers, getSkill, getSkillPrerequisites, skillTreeDefinition, type SkillNodeDefinition } from './skills';
+import { GAME_SETTINGS } from '../../shared/settings';
+import { GraphicsSettingsPanel, useGraphicsSettings } from '../../shared/graphicsSettings';
+import { ITEM_RANK_BACKGROUNDS, ITEM_RANK_COLORS } from './loot';
+import { getDungeonDefinition } from './dungeons/definitions';
 
 type InventoryItemKind = 'weapon' | 'trait' | 'potion';
+type SceneTransition = { phase: 'covering' | 'uncovering'; direction: 'enter' | 'exit' };
 
 type InventorySelection =
   | { kind: 'weapon'; itemNo: number }
@@ -37,6 +44,10 @@ declare global {
       equip: (hand: HandSlot, itemNo: number) => void;
       useItem: (itemNo: number) => void;
       applyStone: (stoneItemNo: number, weaponItemNo: number) => void;
+      dropLoot: (itemId: string) => void;
+      dropCoin: (amount: number) => void;
+      teleport: (x: number, y: number) => void;
+      interact: () => void;
       itemIds: () => {
         weapons: Array<{ itemNo: number; name: string }>;
         stones: Array<{ itemNo: number; traitId: string; count: number }>;
@@ -51,25 +62,56 @@ export function App() {
   const [hoverHand, setHoverHand] = useState<HandSlot | undefined>();
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [panelView, setPanelView] = useState<'inventory' | 'skills'>('inventory');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [graphics, updateGraphics] = useGraphicsSettings();
+  const [measuredFps, setMeasuredFps] = useState(0);
   const [selectedSkillId, setSelectedSkillId] = useState(skillTreeDefinition[0].id);
   const [selectedItem, setSelectedItem] = useState<InventorySelection | undefined>({ kind: 'weapon', itemNo: 2 });
   const [traitPickerWeaponNo, setTraitPickerWeaponNo] = useState<number | undefined>();
+  const [sceneTransition, setSceneTransition] = useState<SceneTransition | undefined>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
+  const graphicsRef = useRef(graphics);
   const hoverHandRef = useRef<HandSlot | undefined>(undefined);
   const keysRef = useRef(new Set<string>());
   const heldAttackRef = useRef(new Set<HandSlot>());
   const aimRef = useRef({ x: adventureWorld.spawn.x + 1, y: adventureWorld.spawn.y });
   const cameraRef = useRef<AdventureCamera>(createAdventureCamera());
   const trackedPlayerRef = useRef({ x: adventureWorld.spawn.x, y: adventureWorld.spawn.y });
+  const transitionActiveRef = useRef(false);
+  const interactionRef = useRef<() => void>(() => undefined);
+  const transitionTimersRef = useRef<number[]>([]);
 
   stateRef.current = state;
+  graphicsRef.current = graphics;
   hoverHandRef.current = hoverHand;
+  const now = performance.now();
   const leftWeapon = useMemo(() => getEquippedWeapon(state, 'left'), [state]);
   const rightWeapon = useMemo(() => getEquippedWeapon(state, 'right'), [state]);
-  const status = useMemo(() => getCharacterStatus(leftWeapon, rightWeapon, state), [leftWeapon, rightWeapon, state]);
+  const status = useMemo(() => getCharacterStatus(leftWeapon, rightWeapon, state, now), [leftWeapon, rightWeapon, state, now]);
   const combatTarget = getCombatTarget(state);
-  const now = performance.now();
+  const sceneTitle = state.dungeon ? getDungeonDefinition(state.dungeon.definitionId).name : 'Adventure';
+
+  interactionRef.current = () => {
+    if (transitionActiveRef.current) return;
+    const prompt = getAdventureInteractionPrompt(stateRef.current);
+    if (!prompt) return;
+    if (prompt === '[E] Open') {
+      dispatch({ type: 'interact', now: performance.now() });
+      return;
+    }
+    const direction = stateRef.current.scene === 'overworld' ? 'enter' : 'exit';
+    transitionActiveRef.current = true;
+    setSceneTransition({ phase: 'covering', direction });
+    transitionTimersRef.current.push(window.setTimeout(() => {
+      dispatch({ type: 'interact', now: performance.now() });
+      setSceneTransition({ phase: 'uncovering', direction });
+    }, 340));
+    transitionTimersRef.current.push(window.setTimeout(() => {
+      transitionActiveRef.current = false;
+      setSceneTransition(undefined);
+    }, 760));
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -81,6 +123,10 @@ export function App() {
       if (/^[1-5]$/.test(key)) {
         event.preventDefault();
         dispatch({ type: 'hotbar', slot: Number(key), now: performance.now(), aim: aimRef.current });
+      }
+      if (key === 'e' && !event.repeat) {
+        event.preventDefault();
+        interactionRef.current();
       }
       if (key === 'i') {
         event.preventDefault();
@@ -107,6 +153,10 @@ export function App() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
+  }, []);
+
+  useEffect(() => () => {
+    for (const timer of transitionTimersRef.current) window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -146,6 +196,10 @@ export function App() {
           if (trait && weapon) dispatch({ type: 'applyTrait', traitId: trait.traitId, weaponInstanceId: weapon.id });
         }
       },
+      dropLoot: (itemId) => dispatch({ type: 'dropLoot', itemId, now: performance.now() }),
+      dropCoin: (amount) => dispatch({ type: 'dropCoins', amount, now: performance.now() }),
+      teleport: (x, y) => dispatch({ type: 'debugTeleport', x, y }),
+      interact: () => dispatch({ type: 'interact', now: performance.now() }),
       itemIds: () => ({
         weapons: stateRef.current.inventory.weapons.map((item) => ({ itemNo: item.itemNo, name: item.name })),
         stones: stateRef.current.inventory.traits.map((item) => ({ itemNo: item.itemNo, traitId: item.traitId, count: item.count })),
@@ -161,6 +215,8 @@ export function App() {
         "window.adventureDebug.equip('left', 3)",
         'window.adventureDebug.useItem(201)',
         'window.adventureDebug.applyStone(104, 2)',
+        "window.adventureDebug.dropLoot('item-01')",
+        'window.adventureDebug.dropCoin(11)',
         'window.adventureDebug.state()',
       ].join('\n'),
     );
@@ -171,15 +227,39 @@ export function App() {
 
   useEffect(() => {
     let frame = 0;
+    let lastTick = performance.now();
+    let fpsFrames = 0;
+    let fpsStartedAt = performance.now();
     const loop = (frameNow: number) => {
-      dispatch({ type: 'tick', now: frameNow, keys: new Set(keysRef.current), aim: aimRef.current });
-      for (const hand of heldAttackRef.current) {
-        dispatch({ type: 'activate', hand, now: frameNow, aim: aimRef.current });
+      const frameMs = 1000 / graphicsRef.current.fps;
+      if (document.visibilityState !== 'visible') {
+        lastTick = frameNow;
+        frame = requestAnimationFrame(loop);
+        return;
       }
-      const canvas = canvasRef.current;
-      if (canvas) {
-        followPlayerCamera(cameraRef.current, stateRef.current.player, trackedPlayerRef.current, canvas);
-        drawScene(canvas, cameraRef.current, stateRef.current, aimRef.current, hoverHandRef.current, frameNow);
+      if (frameNow - lastTick >= frameMs) {
+        const transitioning = transitionActiveRef.current;
+        const keys = transitioning ? new Set<string>() : new Set(keysRef.current);
+        dispatch({
+          type: 'command',
+          now: frameNow,
+          command: keysToAdventureInputCommand(stateRef.current.localPlayerId, stateRef.current.simulationTick + 1, keys, aimRef.current),
+        });
+        for (const hand of transitioning ? [] : heldAttackRef.current) {
+          dispatch({ type: 'activate', hand, now: frameNow, aim: aimRef.current });
+        }
+        const canvas = canvasRef.current;
+        if (canvas) {
+          followPlayerCamera(cameraRef.current, stateRef.current.player, trackedPlayerRef.current, canvas);
+          drawScene(canvas, cameraRef.current, stateRef.current, graphicsRef.current, aimRef.current, hoverHandRef.current, getAdventureInteractionPrompt(stateRef.current), frameNow);
+        }
+        lastTick = frameNow - ((frameNow - lastTick) % frameMs);
+        fpsFrames += 1;
+        if (frameNow - fpsStartedAt >= 500) {
+          setMeasuredFps(Math.min(graphicsRef.current.fps, Math.round(fpsFrames * 1000 / (frameNow - fpsStartedAt))));
+          fpsFrames = 0;
+          fpsStartedAt = frameNow;
+        }
       }
       frame = requestAnimationFrame(loop);
     };
@@ -203,6 +283,17 @@ export function App() {
         <canvas
           ref={canvasRef}
           className="adventure-canvas"
+          data-player-x={Math.round(state.player.x)}
+          data-player-y={Math.round(state.player.y)}
+          data-loaded-chunks={state.loadedChunkKeys.join(' ')}
+          data-scene={state.scene}
+          data-dungeon-rooms={state.dungeon?.rooms.length ?? 0}
+          data-dungeon-chests={state.dungeon?.chests.length ?? 0}
+          data-open-chests={state.dungeon?.chests.filter((chest) => chest.opened).length ?? 0}
+          data-enemies={state.enemies.filter((enemy) => enemy.hp > 0).length}
+          data-world-drops={state.worldDrops.length}
+          data-first-chest-x={state.dungeon?.chests.find((chest) => !chest.opened)?.x ?? ''}
+          data-first-chest-y={state.dungeon?.chests.find((chest) => !chest.opened)?.y ?? ''}
           onContextMenu={(event) => event.preventDefault()}
           onMouseMove={(event) => updateAim(event.clientX, event.clientY)}
           onMouseDown={(event) => {
@@ -222,15 +313,24 @@ export function App() {
           }}
         />
 
+        {sceneTransition && (
+          <div
+            key={`${sceneTransition.direction}-${sceneTransition.phase}`}
+            className={`adventure-scene-swipe ${sceneTransition.phase} ${sceneTransition.direction}`}
+            aria-hidden="true"
+          />
+        )}
+
         <div className="adventure-hud" aria-label="Adventure status">
           <div className="adventure-title">
             <Swords size={19} />
             <div>
-              <h1>Adventure</h1>
-              <p>Explore | Combat | Strengthen</p>
+              <h1>{sceneTitle}</h1>
+              <p>{state.scene === 'dungeon' ? 'Explore | Clear rooms | Find loot' : 'Explore | Combat | Strengthen'}</p>
             </div>
           </div>
           <div className="adventure-vitals">
+            <div className="adventure-coin-balance">🪙 {state.coins}</div>
             <div className="status-hp-row">
               <HeartPulse size={18} />
               <span>HP {Math.ceil(state.player.hp)} / {state.player.maxHp}</span>
@@ -259,6 +359,9 @@ export function App() {
             <button className="inventory-toggle" type="button" onClick={() => { setPanelView('skills'); setInventoryOpen(true); }}>
               <Sparkles size={18} />
               [K] Skills · {state.skills.points} points
+            </button>
+            <button className="inventory-toggle" type="button" onClick={() => { setInventoryOpen(false); setSettingsOpen(true); }}>
+              <Settings size={18} /> Settings
             </button>
           </div>
         </div>
@@ -302,6 +405,7 @@ export function App() {
           <MousePointer2 size={16} />
           <span>WASD/Arrows move · Cursor aims · Left/Right click attack · 1–5 item/skill · Wheel/pinch zoom · I inventory · K skills</span>
         </div>
+        {graphics.showFps && <div className="fps-counter adventure-fps-counter">{measuredFps} FPS</div>}
 
         {inventoryOpen && (
           <InventoryPanel
@@ -333,6 +437,13 @@ export function App() {
             onClose={() => setInventoryOpen(false)}
           />
         )}
+        {settingsOpen && (
+          <SettingsPanel
+            graphics={graphics}
+            onGraphicsChange={updateGraphics}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
       </section>
     </main>
   );
@@ -348,8 +459,14 @@ function HotbarSlotButton({ slot, state, now, onActivate }: { slot: number; stat
   }
   if (entry.kind === 'potion') {
     const item = state.inventory.potions.find((potion) => potion.itemNo === entry.itemNo);
-    return <button className={flashed ? 'item-slot item-used' : 'item-slot'} type="button" onClick={onActivate} title={item ? `${item.name} x${item.count}` : 'Unavailable item'}>
+    const readyAt = item ? state.potionReadyAt[item.itemId] ?? 0 : 0;
+    const cooldownMs = item?.cooldownMs ?? 1;
+    const remaining = Math.max(0, readyAt - now);
+    const cooldown = Math.min(1, remaining / cooldownMs);
+    return <button className={`item-slot ${remaining <= 0 ? 'ready' : ''} ${flashed ? 'item-used' : ''}`} type="button" onClick={onActivate} title={item ? `${item.name} x${item.count}` : 'Unavailable item'}>
       <small>{slot}</small><span>{item?.icon ?? '×'}</span>{item && <em>x{item.count}</em>}
+      <span className="weapon-cooldown" style={{ background: `conic-gradient(rgba(18, 22, 28, 0.68) ${cooldown * 100}%, rgba(18, 22, 28, 0) 0)`, opacity: remaining > 0 ? 1 : 0 }} />
+      {remaining > 0 && <strong className="slot-cooldown-time">{Math.ceil(remaining / 1000)}s</strong>}
     </button>;
   }
   const skill = getSkill(entry.skillId);
@@ -361,7 +478,7 @@ function HotbarSlotButton({ slot, state, now, onActivate }: { slot: number; stat
     <small>{slot}</small>
     <span className="active-skill-glyph" style={{ color: skill.color }}>{skill.icon}</span>
     <span className="weapon-cooldown" style={{ background: `conic-gradient(rgba(18, 22, 28, 0.68) ${cooldown * 100}%, rgba(18, 22, 28, 0) 0)`, opacity: remaining > 0 ? 1 : 0 }} />
-    {remaining > 0 && <em>{Math.ceil(remaining / 1000)}s</em>}
+    {remaining > 0 && <strong className="slot-cooldown-time">{Math.ceil(remaining / 1000)}s</strong>}
   </button>;
 }
 
@@ -508,6 +625,7 @@ function InventoryPanel({
                 itemNo={item.itemNo}
                 icon={item.icon}
                 name={item.name}
+                rarityBackground={ITEM_RANK_BACKGROUNDS[item.rank]}
                 countLabel={`x${item.count}`}
                 onClick={() => onSelectItem({ kind: 'potion', itemNo: item.itemNo })}
               />
@@ -525,6 +643,7 @@ function InventoryPanel({
                   icon={effective.projectile?.glyph ?? effective.handGlyph}
                   color={effective.color}
                   name={weapon.name}
+                  rarityBackground={ITEM_RANK_BACKGROUNDS[effective.rank]}
                   equippedLeft={weapon.id === state.character.leftWeaponInstanceId}
                   equippedRight={weapon.id === state.character.rightWeaponInstanceId}
                   onClick={() => onSelectItem({ kind: 'weapon', itemNo: weapon.itemNo })}
@@ -543,6 +662,7 @@ function InventoryPanel({
                   itemNo={stack.itemNo}
                   icon={<StoneIcon trait={trait} size="slot" />}
                   name={trait.name}
+                  rarityBackground={ITEM_RANK_BACKGROUNDS[trait.rank]}
                   countLabel={`x${stack.count}`}
                   onClick={() => onSelectItem({ kind: 'trait', itemNo: stack.itemNo })}
                 />
@@ -570,6 +690,26 @@ function InventoryPanel({
           />
         )}
       </div>}
+    </aside>
+  );
+}
+
+function SettingsPanel({
+  graphics,
+  onGraphicsChange,
+  onClose,
+}: {
+  graphics: ReturnType<typeof useGraphicsSettings>[0];
+  onGraphicsChange: ReturnType<typeof useGraphicsSettings>[1];
+  onClose: () => void;
+}) {
+  return (
+    <aside className="adventure-settings-panel" aria-label="Adventure settings">
+      <div className="inventory-heading">
+        <div className="standalone-panel-title"><Settings size={18} /> Settings</div>
+        <button type="button" onClick={onClose} aria-label="Close settings">×</button>
+      </div>
+      <GraphicsSettingsPanel settings={graphics} onChange={onGraphicsChange} />
     </aside>
   );
 }
@@ -621,10 +761,16 @@ function SkillTreePanel({
     event.stopPropagation();
     onSelectSkill(skill.id);
     if (state.skills.unlockedIds.includes(skill.id)) return;
+    if (!prerequisitesMetFor(state, skill)) {
+      holdTimerRef.current = setTimeout(() => {
+        rejectUnlock(skill.id);
+        holdTimerRef.current = undefined;
+      }, 500);
+      return;
+    }
     setHoldingId(skill.id);
     holdTimerRef.current = setTimeout(() => {
-      const prerequisitesMet = prerequisitesMetFor(state, skill);
-      if (prerequisitesMet && state.skills.points >= skill.cost) {
+      if (state.skills.points >= skill.cost) {
         onUnlockSkill(skill.id);
         setCompletedId(skill.id);
         if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
@@ -896,6 +1042,7 @@ function InventorySlot({
   icon,
   color,
   name,
+  rarityBackground,
   countLabel,
   equippedLeft,
   equippedRight,
@@ -906,13 +1053,20 @@ function InventorySlot({
   icon: ReactNode;
   color?: string;
   name: string;
+  rarityBackground?: string;
   countLabel?: string;
   equippedLeft?: boolean;
   equippedRight?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button className={`inventory-slot ${selected ? 'selected' : ''}`} type="button" onClick={onClick} title={`#${itemNo} ${name}`}>
+    <button
+      className={`inventory-slot ${selected ? 'selected' : ''}`}
+      style={rarityBackground ? { '--rarity-background': rarityBackground } as CSSProperties : undefined}
+      type="button"
+      onClick={onClick}
+      title={`#${itemNo} ${name}`}
+    >
       <span className="slot-icon" style={{ color }}>{icon}</span>
       {countLabel && <span className="slot-count">{countLabel}</span>}
       {equippedLeft && <span className="equipped-mark left">L</span>}
@@ -1043,7 +1197,7 @@ function ItemInspector({
     const effective = getEffectiveWeapon(state, weapon.id);
     return (
       <section className="item-inspector">
-        <InspectorHeader icon={effective.projectile?.glyph ?? effective.handGlyph} color={effective.color} name={weapon.name} itemNo={weapon.itemNo} />
+        <InspectorHeader icon={effective.projectile?.glyph ?? effective.handGlyph} color={ITEM_RANK_COLORS[effective.rank]} name={weapon.name} itemNo={weapon.itemNo} />
         <div className="inspector-scroll">
           <div className="trait-slots">
             {Array.from({ length: 5 }, (_, index) => {
@@ -1115,7 +1269,7 @@ function ItemInspector({
     const trait = getTrait(stack.traitId);
     return (
       <section className="item-inspector">
-        <InspectorHeader icon={<StoneIcon trait={trait} size="header" />} name={trait.name} itemNo={stack.itemNo} />
+        <InspectorHeader icon={<StoneIcon trait={trait} size="header" />} color={ITEM_RANK_COLORS[trait.rank]} name={trait.name} itemNo={stack.itemNo} />
         <div className="inspector-scroll">
           <div className="trait-slots single">
             <span className="stone-socket filled"><StoneIcon trait={trait} size="socket" /></span>
@@ -1134,9 +1288,9 @@ function ItemInspector({
   if (!potion) return null;
   return (
     <section className="item-inspector">
-      <InspectorHeader icon={potion.icon} name={potion.name} itemNo={potion.itemNo} />
+      <InspectorHeader icon={potion.icon} color={ITEM_RANK_COLORS[potion.rank]} name={potion.name} itemNo={potion.itemNo} />
       <div className="inspector-scroll">
-        <p>Restores {potion.heal} HP. Stack: x{potion.count}</p>
+        <p>Restores {potion.heal} HP. Cooldown: {potion.cooldownMs / 1000}s. Stack: x{potion.count}</p>
         <div className="weapon-stat-grid">
           <StatPill label="Heal" value={potion.heal} />
           <StatPill label="Count" value={potion.count} />
@@ -1230,11 +1384,11 @@ function formatStatBonus(value: number) {
 }
 
 
-function getCharacterStatus(leftWeapon: EffectiveWeapon | undefined, rightWeapon: EffectiveWeapon | undefined, state: AdventureState) {
+function getCharacterStatus(leftWeapon: EffectiveWeapon | undefined, rightWeapon: EffectiveWeapon | undefined, state: AdventureState, now: number) {
   const weapons = [leftWeapon, rightWeapon].filter((weapon): weapon is EffectiveWeapon => Boolean(weapon));
   const outfit = getOutfit(state.character.outfitId);
   const skills = getPassiveSkillModifiers(state.skills.unlockedIds);
-  const activeHaste = state.skills.hasteUntil > performance.now()
+  const activeHaste = state.skills.hasteUntil > now
     ? state.skills.unlockedIds.reduce((bonus, skillId) => {
       const effect = getSkill(skillId).active?.effect;
       return effect?.kind === 'haste' ? Math.max(bonus, effect.speedBonus) : bonus;
@@ -1329,7 +1483,7 @@ function InspectorHeader({ icon, color, name, itemNo }: { icon: ReactNode; color
     <div className="inspector-header">
       <span style={{ color }}>{icon}</span>
       <div>
-        <h3>{name}</h3>
+        <h3 style={{ color }}>{name}</h3>
       </div>
       <small className="inspector-item-no">Item #{itemNo}</small>
     </div>

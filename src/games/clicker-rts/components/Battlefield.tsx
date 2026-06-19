@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LocateFixed } from 'lucide-react';
 import { getUnit } from '../../../shared/content';
 import { CastleEntity, CombatEvent, GameState, ProjectileEntity, UnitEntity, world } from '../state';
@@ -6,9 +6,11 @@ import { GAME_SETTINGS } from '../../../shared/settings';
 import { drawTerrainVisual } from '../../../shared/terrainRenderer';
 import { createProceduralGround, drawProceduralGround } from '../../../shared/proceduralGround';
 import { getPunchOffset } from '../../../shared/combatPresentation';
+import type { GraphicsSettings } from '../../../shared/graphicsSettings';
 
 type Props = {
   state: GameState;
+  graphics: GraphicsSettings;
   onSelectUnit: (unitId?: string) => void;
   onSelectUnits: (unitIds: string[]) => void;
   onSelectCastle: (castleId: string) => void;
@@ -28,6 +30,8 @@ type Fx = CombatEvent & {
   life: number;
 };
 
+type ViewBounds = { left: number; top: number; right: number; bottom: number };
+
 const minZoom = 0.25;
 const maxZoom = 2.00;
 const unitBodyHeight = 38;
@@ -40,9 +44,11 @@ const initialCamera = {
   zoom: GAME_SETTINGS.map.initialZoom,
 };
 
-export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle, onSelectBase, onClearSelection, onCommand }: Props) {
+export function Battlefield({ state, graphics, onSelectUnit, onSelectUnits, onSelectCastle, onSelectBase, onClearSelection, onCommand }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
+  const graphicsRef = useRef(graphics);
+  const [measuredFps, setMeasuredFps] = useState(0);
   const cameraRef = useRef<Camera>(clampCamera(initialCamera));
   const dragRef = useRef({
     active: false,
@@ -65,6 +71,7 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
   const handlersRef = useRef({ onSelectUnit, onSelectUnits, onSelectCastle, onSelectBase, onClearSelection, onCommand });
 
   stateRef.current = state;
+  graphicsRef.current = graphics;
   handlersRef.current = { onSelectUnit, onSelectUnits, onSelectCastle, onSelectBase, onClearSelection, onCommand };
 
   const centerOnSpawn = () => {
@@ -301,13 +308,28 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
     if (!ctx) return;
     let frame = 0;
     let lastNow = performance.now();
+    let lastRender = 0;
+    let fpsFrames = 0;
+    let fpsStartedAt = performance.now();
 
     const render = (now: number) => {
+      if (document.visibilityState !== 'visible') {
+        lastNow = now;
+        lastRender = now;
+        frame = requestAnimationFrame(render);
+        return;
+      }
+      const frameMs = 1000 / graphicsRef.current.fps;
+      if (now - lastRender < frameMs) {
+        frame = requestAnimationFrame(render);
+        return;
+      }
       const delta = Math.min((now - lastNow) / 1000, 0.05);
       lastNow = now;
+      lastRender = now - ((now - lastRender) % frameMs);
       applyKeyboardPan(keysRef.current, cameraRef.current, delta);
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, graphicsRef.current.resolutionScale);
       const width = Math.max(320, Math.floor(rect.width));
       const height = Math.max(320, Math.floor(rect.height));
 
@@ -318,9 +340,15 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      drawScene(ctx, width, height, cameraRef.current, stateRef.current, fxRef.current, pingRef.current, dragRef.current, now);
+      drawScene(ctx, width, height, cameraRef.current, stateRef.current, graphicsRef.current, fxRef.current, pingRef.current, dragRef.current, now);
       fxRef.current = fxRef.current.filter((fx) => now - fx.born < getFxLife(fx));
       pingRef.current = pingRef.current.filter((ping) => now - ping.born < 850);
+      fpsFrames += 1;
+      if (now - fpsStartedAt >= 500) {
+        setMeasuredFps(Math.min(graphicsRef.current.fps, Math.round(fpsFrames * 1000 / (now - fpsStartedAt))));
+        fpsFrames = 0;
+        fpsStartedAt = now;
+      }
       frame = requestAnimationFrame(render);
     };
 
@@ -335,6 +363,7 @@ export function Battlefield({ state, onSelectUnit, onSelectUnits, onSelectCastle
         <LocateFixed size={21} />
       </button>
       <div className="map-hint">L select · R command · M/R drag pan · Wheel zoom</div>
+      {graphics.showFps && <div className="fps-counter">{measuredFps} FPS</div>}
     </section>
   );
 }
@@ -345,6 +374,7 @@ function drawScene(
   height: number,
   camera: Camera,
   state: GameState,
+  graphics: GraphicsSettings,
   fx: Fx[],
   pings: Array<{ id: number; born: number; x: number; y: number; kind: string }>,
   drag: {
@@ -358,6 +388,18 @@ function drawScene(
   },
   now: number,
 ) {
+  const margin = GAME_SETTINGS.performance.cullMargin;
+  const bounds: ViewBounds = {
+    left: camera.x - margin,
+    top: camera.y - margin,
+    right: camera.x + width / camera.zoom + margin,
+    bottom: camera.y + height / camera.zoom + margin,
+  };
+  const selectedIds = new Set(state.selectedUnitIds);
+  const targets = new Map<string, UnitEntity | CastleEntity>();
+  for (const unit of state.units) targets.set(unit.id, unit);
+  for (const castle of state.enemyCastles) targets.set(castle.id, castle);
+
   ctx.fillStyle = '#9ac27c';
   ctx.fillRect(0, 0, width, height);
 
@@ -365,16 +407,17 @@ function drawScene(
   ctx.scale(camera.zoom, camera.zoom);
   ctx.translate(-camera.x, -camera.y);
 
-  drawMap(ctx, state.mapSeed, now);
-  drawBase(ctx);
-  for (const castle of state.enemyCastles) drawCastle(ctx, castle);
-  for (const ping of pings) drawPing(ctx, ping, now);
+  drawMap(ctx, state.mapSeed, bounds, now, graphics.ambientEffects);
+  if (isPointVisible(world.spawnPlayer, bounds, 100)) drawBase(ctx);
+  for (const castle of state.enemyCastles) if (isPointVisible(castle, bounds, 130)) drawCastle(ctx, castle);
+  for (const ping of pings) if (isPointVisible(ping, bounds, 60)) drawPing(ctx, ping, now);
   for (const unit of state.units) {
     if (unit.team === 'player' && getUnit(unit.defId).kind === 'worker') continue;
-    drawUnit(ctx, unit, state, state.selectedUnitIds.includes(unit.id) || state.selection.kind === 'unit' && state.selection.unitId === unit.id, now);
+    if (!isPointVisible(unit, bounds, 80)) continue;
+    drawUnit(ctx, unit, targets, selectedIds.has(unit.id) || state.selection.kind === 'unit' && state.selection.unitId === unit.id, now);
   }
-  for (const projectile of state.projectiles) drawProjectile(ctx, projectile);
-  for (const effect of fx) drawEffect(ctx, effect, now);
+  for (const projectile of state.projectiles) if (isPointVisible(projectile, bounds, 50)) drawProjectile(ctx, projectile);
+  for (const effect of fx) if (isPointVisible({ x: effect.toX, y: effect.toY }, bounds, 160)) drawEffect(ctx, effect, now);
 
   ctx.restore();
 
@@ -385,30 +428,35 @@ function drawScene(
 
 const clickerGroundBySeed = new Map<number, ReturnType<typeof createProceduralGround>>();
 
-function drawMap(ctx: CanvasRenderingContext2D, seed: number, now: number) {
+function drawMap(ctx: CanvasRenderingContext2D, seed: number, bounds: ViewBounds, now: number, ambientEffects: boolean) {
   let tiles = clickerGroundBySeed.get(seed);
   if (!tiles) {
     tiles = createProceduralGround(world.width, world.height, world.spawnPlayer, seed);
     clickerGroundBySeed.set(seed, tiles);
   }
-  drawProceduralGround(ctx, tiles, world.width, world.height, now);
+  drawProceduralGround(ctx, tiles, world.width, world.height, now, bounds, ambientEffects);
 
   ctx.strokeStyle = 'rgba(74, 107, 61, 0.065)';
   ctx.lineWidth = 1;
-  for (let x = 0; x < world.width; x += GAME_SETTINGS.map.gridSize) {
+  const firstX = Math.max(0, Math.floor(bounds.left / GAME_SETTINGS.map.gridSize) * GAME_SETTINGS.map.gridSize);
+  const lastX = Math.min(world.width, bounds.right);
+  const firstY = Math.max(0, Math.floor(bounds.top / GAME_SETTINGS.map.gridSize) * GAME_SETTINGS.map.gridSize);
+  const lastY = Math.min(world.height, bounds.bottom);
+  for (let x = firstX; x <= lastX; x += GAME_SETTINGS.map.gridSize) {
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, world.height);
+    ctx.moveTo(x, firstY);
+    ctx.lineTo(x, lastY);
     ctx.stroke();
   }
-  for (let y = 0; y < world.height; y += GAME_SETTINGS.map.gridSize) {
+  for (let y = firstY; y <= lastY; y += GAME_SETTINGS.map.gridSize) {
     ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(world.width, y);
+    ctx.moveTo(firstX, y);
+    ctx.lineTo(lastX, y);
     ctx.stroke();
   }
 
   for (const prop of world.terrainProps) {
+    if (!isPointVisible(prop, bounds, 90)) continue;
     drawTerrainProp(ctx, prop.kind, prop.x, prop.y, prop.size, prop.rotation);
   }
 }
@@ -483,7 +531,7 @@ function drawCastle(ctx: CanvasRenderingContext2D, castle: CastleEntity) {
   ctx.restore();
 }
 
-function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, state: GameState, selected: boolean, now: number) {
+function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, targets: Map<string, UnitEntity | CastleEntity>, selected: boolean, now: number) {
   const definition = getUnit(unit.defId);
   const faceWobble = Math.sin(now / 240 + unit.x * 0.01) * 1.2;
   const isEnemy = unit.team === 'enemy';
@@ -494,9 +542,7 @@ function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, state: GameSt
   const leftHand = useAttackHands ? definition.attackLeftHand : isWorking ? definition.workLeftHand ?? definition.leftHand : definition.leftHand;
   const rightHand = useAttackHands ? definition.attackRightHand : isWorking ? definition.workRightHand ?? definition.rightHand : definition.rightHand;
   const bodyWidth = definition.pillWidth;
-  const target = unit.targetId
-    ? state.units.find((candidate) => candidate.id === unit.targetId) ?? state.enemyCastles.find((candidate) => candidate.id === unit.targetId)
-    : undefined;
+  const target = unit.targetId ? targets.get(unit.targetId) : undefined;
   const attackProgress = unit.lastAttackAt ? Math.min(1, (now - unit.lastAttackAt) / 320) : 1;
   const punch = isAttacking && definition.type === 'melee' && target ? getPunchOffset(unit, target, attackProgress) : { x: 0, y: 0 };
 
@@ -547,6 +593,11 @@ function drawUnit(ctx: CanvasRenderingContext2D, unit: UnitEntity, state: GameSt
   }
   ctx.restore();
 }
+
+function isPointVisible(point: { x: number; y: number }, bounds: ViewBounds, margin = 0) {
+  return point.x >= bounds.left - margin && point.x <= bounds.right + margin && point.y >= bounds.top - margin && point.y <= bounds.bottom + margin;
+}
+
 
 function drawProjectile(ctx: CanvasRenderingContext2D, projectile: ProjectileEntity) {
   ctx.save();

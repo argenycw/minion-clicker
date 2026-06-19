@@ -1,11 +1,18 @@
 import { GAME_SETTINGS } from '../../shared/settings';
 import { getClosestBorderPoint } from '../../shared/combatPresentation';
 import { getTrait, getWeapon, type TraitDefinition, type WeaponDefinition } from './content';
-import { generateAdventureEnemies } from './enemies/generate';
 import type { AdventureEnemy } from './enemies/types';
 import { getOutfit } from './outfits';
 import { getPassiveSkillModifiers, getSkill, getSkillPrerequisites } from './skills';
-import { adventureWorld, createAdventureWorld, type BiomeTile, type WorldObject } from './world';
+import { adventureWorld, type BiomeTile, type WorldArea, type WorldObject } from './world';
+import { generateAdventureChunk } from './world/chunks/generate';
+import { getChunkCoordinate, getChunkKey, getLoadedChunkCoordinates } from './world/chunks/coordinates';
+import type { AdventureChunk } from './world/chunks/types';
+import { getAdventureItem, rollLootTable, type ItemRank, type LootTable } from './loot';
+import { generateDungeon } from './dungeons/generate';
+import { getDungeonDefinition } from './dungeons/definitions';
+import type { DungeonInstance, DungeonRect } from './dungeons/types';
+import type { WorldLocation } from './world/locations/types';
 
 export type Facing = 'left' | 'right';
 export type HandSlot = 'left' | 'right';
@@ -35,10 +42,23 @@ export type TraitStack = {
 
 export type PotionStack = {
   itemNo: number;
+  itemId: string;
   name: string;
   icon: string;
+  rank: ItemRank;
   count: number;
   heal: number;
+  cooldownMs: number;
+};
+
+export type WorldDrop = {
+  id: string;
+  kind: 'coin' | 'item';
+  x: number;
+  y: number;
+  born: number;
+  amount?: number;
+  itemId?: string;
 };
 
 export type AdventureInventory = {
@@ -134,12 +154,51 @@ export type CombatTarget =
   | { kind: 'enemy'; id: string }
   | { kind: 'prop'; id: string };
 
+export type AdventurePlayerId = `player-${string}`;
+
+export type AdventurePlayerState = {
+  id: AdventurePlayerId;
+  actor: Actor;
+  character: AdventureCharacter;
+  inventory: AdventureInventory;
+  coins: number;
+  skills: AdventureSkills;
+  cooldownReadyAt: Record<HandSlot, number>;
+  potionReadyAt: Record<string, number>;
+  itemFlash: Array<{ slot: number; born: number }>;
+  hotbarSlots: Array<HotbarSlot | undefined>;
+  weaponFlash: Array<{ hand: HandSlot; born: number }>;
+  combatTarget?: CombatTarget;
+};
+
+export type CreateAdventureStateOptions = {
+  now?: number;
+  mapSeed?: number;
+  localPlayerId?: AdventurePlayerId;
+  hostPlayerId?: AdventurePlayerId;
+  random?: () => number;
+};
+
 export type AdventureState = {
+  scene: 'overworld' | 'dungeon';
   mapSeed: number;
+  localPlayerId: AdventurePlayerId;
+  hostPlayerId: AdventurePlayerId;
+  players: Record<AdventurePlayerId, AdventurePlayerState>;
+  simulationTick: number;
+  loadedChunks: AdventureChunk[];
+  loadedChunkKeys: string[];
+  chunkChanges: Record<string, ChunkChanges>;
   biomeTiles: BiomeTile[];
+  worldAreas: WorldArea[];
+  worldLocations: WorldLocation[];
+  dungeon?: DungeonInstance;
+  overworldReturn?: OverworldReturnState;
   player: Actor;
   character: AdventureCharacter;
   inventory: AdventureInventory;
+  coins: number;
+  worldDrops: WorldDrop[];
   enemies: AdventureEnemy[];
   worldObjects: WorldObject[];
   projectiles: Projectile[];
@@ -147,6 +206,7 @@ export type AdventureState = {
   propParticles: PropParticle[];
   skills: AdventureSkills;
   cooldownReadyAt: Record<HandSlot, number>;
+  potionReadyAt: Record<string, number>;
   itemFlash: Array<{ slot: number; born: number }>;
   hotbarSlots: Array<HotbarSlot | undefined>;
   weaponFlash: Array<{ hand: HandSlot; born: number }>;
@@ -155,17 +215,53 @@ export type AdventureState = {
   combatTarget?: CombatTarget;
 };
 
+type OverworldReturnState = Pick<AdventureState,
+  | 'loadedChunks'
+  | 'loadedChunkKeys'
+  | 'chunkChanges'
+  | 'biomeTiles'
+  | 'worldAreas'
+  | 'worldLocations'
+  | 'worldDrops'
+  | 'enemies'
+  | 'worldObjects'
+  | 'combatTarget'
+> & { player: Actor };
+
+type ChunkChanges = {
+  objectHp: Record<string, number>;
+  enemyHp: Record<string, number>;
+  drops: WorldDrop[];
+};
+
 export { adventureWorld } from './world';
 
 export const PLAYER_MOVE_SPEED = 250;
 
-export const createInitialAdventureState = (): AdventureState => {
-  const now = performance.now();
-  const mapSeed = Math.floor(Math.random() * 1_000_000_000);
-  const generatedWorld = createAdventureWorld(mapSeed);
-  return {
+export const createInitialAdventureState = (options: CreateAdventureStateOptions = {}): AdventureState => {
+  const random = options.random ?? Math.random;
+  const now = options.now ?? performance.now();
+  const mapSeed = options.mapSeed ?? Math.floor(random() * 1_000_000_000);
+  const localPlayerId = options.localPlayerId ?? 'player-01';
+  const hostPlayerId = options.hostPlayerId ?? localPlayerId;
+  const loadedChunks = createLoadedChunks(mapSeed, adventureWorld.spawn, now);
+  const generatedWorld = {
+    biomeTiles: loadedChunks.flatMap((chunk) => chunk.biomeTiles),
+    objects: loadedChunks.flatMap((chunk) => chunk.objects),
+  };
+  const state: AdventureState = {
+    scene: 'overworld',
     mapSeed,
+    localPlayerId,
+    hostPlayerId,
+    players: {},
+    simulationTick: 0,
+    loadedChunks,
+    loadedChunkKeys: loadedChunks.map((chunk) => chunk.key),
+    chunkChanges: {},
     biomeTiles: generatedWorld.biomeTiles,
+    worldAreas: loadedChunks.flatMap((chunk) => chunk.areas),
+    worldLocations: loadedChunks.flatMap((chunk) => chunk.locations),
     player: {
       id: 'player-01',
       name: 'You',
@@ -185,6 +281,8 @@ export const createInitialAdventureState = (): AdventureState => {
       outfitId: 'outfit-00',
     },
     inventory: createInitialInventory(),
+    coins: 0,
+    worldDrops: [],
     enemies: [
       {
         id: 'enemy-00',
@@ -212,7 +310,7 @@ export const createInitialAdventureState = (): AdventureState => {
         attackReadyAt: now,
         invulnerable: true,
       },
-      ...generateAdventureEnemies(generatedWorld.width, generatedWorld.height, generatedWorld.spawn, generatedWorld.biomeTiles, now),
+      ...loadedChunks.flatMap((chunk) => chunk.enemies).filter((enemy) => enemy.id !== 'enemy-00'),
     ],
     worldObjects: generatedWorld.objects.map((object) => ({ ...object })),
     projectiles: [],
@@ -225,6 +323,7 @@ export const createInitialAdventureState = (): AdventureState => {
       hasteUntil: 0,
     },
     cooldownReadyAt: { left: now, right: now },
+    potionReadyAt: {},
     itemFlash: [],
     hotbarSlots: [{ kind: 'potion', itemNo: 201 }, undefined, undefined, undefined, undefined],
     weaponFlash: [],
@@ -232,7 +331,145 @@ export const createInitialAdventureState = (): AdventureState => {
     nextEntityId: 1,
     combatTarget: { kind: 'enemy', id: 'enemy-00' },
   };
+  return syncLegacyFieldsToPlayers(state);
 };
+
+function createLoadedChunks(mapSeed: number, position: { x: number; y: number }, now: number) {
+  return getLoadedChunkCoordinates(getChunkCoordinate(position.x, position.y))
+    .map((coordinate) => generateAdventureChunk(mapSeed, coordinate, adventureWorld.spawn, now));
+}
+
+export function getLocalAdventurePlayer(state: AdventureState): AdventurePlayerState {
+  return state.players[state.localPlayerId] ?? {
+    id: state.localPlayerId,
+    actor: state.player,
+    character: state.character,
+    inventory: state.inventory,
+    coins: state.coins,
+    skills: state.skills,
+    cooldownReadyAt: state.cooldownReadyAt,
+    potionReadyAt: state.potionReadyAt,
+    itemFlash: state.itemFlash,
+    hotbarSlots: state.hotbarSlots,
+    weaponFlash: state.weaponFlash,
+    combatTarget: state.combatTarget,
+  };
+}
+
+export function syncLegacyFieldsToPlayers(state: AdventureState): AdventureState {
+  const localPlayer: AdventurePlayerState = {
+    id: state.localPlayerId,
+    actor: state.player,
+    character: state.character,
+    inventory: state.inventory,
+    coins: state.coins,
+    skills: state.skills,
+    cooldownReadyAt: state.cooldownReadyAt,
+    potionReadyAt: state.potionReadyAt,
+    itemFlash: state.itemFlash,
+    hotbarSlots: state.hotbarSlots,
+    weaponFlash: state.weaponFlash,
+    combatTarget: state.combatTarget,
+  };
+  return {
+    ...state,
+    players: {
+      ...state.players,
+      [state.localPlayerId]: localPlayer,
+    },
+  };
+}
+
+export function useAdventurePlayerAsLocal(state: AdventureState, playerId: AdventurePlayerId): AdventureState {
+  const player = state.players[playerId];
+  if (!player) return state;
+  return {
+    ...state,
+    localPlayerId: playerId,
+    player: player.actor,
+    character: player.character,
+    inventory: player.inventory,
+    coins: player.coins,
+    skills: player.skills,
+    cooldownReadyAt: player.cooldownReadyAt,
+    potionReadyAt: player.potionReadyAt,
+    itemFlash: player.itemFlash,
+    hotbarSlots: player.hotbarSlots,
+    weaponFlash: player.weaponFlash,
+    combatTarget: player.combatTarget,
+  };
+}
+
+function streamAdventureChunks(state: AdventureState, now: number): AdventureState {
+  if (state.scene === 'dungeon') return state;
+  const coordinates = getLoadedChunkCoordinates(getChunkCoordinate(state.player.x, state.player.y));
+  const desiredKeys = coordinates.map(getChunkKey);
+  if (desiredKeys.length === state.loadedChunkKeys.length && desiredKeys.every((key) => state.loadedChunkKeys.includes(key))) return state;
+
+  const chunkChanges = captureChunkChanges(state);
+  const currentObjects = groupByChunk(state.worldObjects, (object) => object.chunkKey ?? getChunkKey(getChunkCoordinate(object.x, object.y)));
+  const currentEnemies = groupByChunk(state.enemies, (enemy) => enemy.chunkKey ?? getChunkKey(getChunkCoordinate(enemy.spawnX, enemy.spawnY)));
+  const currentDrops = groupByChunk(state.worldDrops, (drop) => getChunkKey(getChunkCoordinate(drop.x, drop.y)));
+  const currentKeys = new Set(state.loadedChunkKeys);
+  const loadedChunks = coordinates.map((coordinate) => {
+    const generated = generateAdventureChunk(state.mapSeed, coordinate, adventureWorld.spawn, now);
+    const changes = chunkChanges[generated.key];
+    const objects = currentKeys.has(generated.key)
+      ? currentObjects[generated.key] ?? []
+      : applyObjectChanges(generated.objects, changes);
+    const enemies = currentKeys.has(generated.key)
+      ? currentEnemies[generated.key] ?? []
+      : applyEnemyChanges(generated.enemies, changes);
+    return { ...generated, objects, enemies };
+  });
+
+  return {
+    ...state,
+    loadedChunks,
+    loadedChunkKeys: desiredKeys,
+    chunkChanges,
+    biomeTiles: loadedChunks.flatMap((chunk) => chunk.biomeTiles),
+    worldAreas: loadedChunks.flatMap((chunk) => chunk.areas),
+    worldLocations: loadedChunks.flatMap((chunk) => chunk.locations),
+    worldObjects: loadedChunks.flatMap((chunk) => chunk.objects),
+    enemies: loadedChunks.flatMap((chunk) => chunk.enemies),
+    worldDrops: loadedChunks.flatMap((chunk) => currentKeys.has(chunk.key)
+      ? currentDrops[chunk.key] ?? []
+      : chunkChanges[chunk.key]?.drops ?? []),
+  };
+}
+
+function captureChunkChanges(state: AdventureState) {
+  const changes = { ...state.chunkChanges };
+  for (const key of state.loadedChunkKeys) {
+    const objectHp = Object.fromEntries(state.worldObjects
+      .filter((object) => (object.chunkKey ?? getChunkKey(getChunkCoordinate(object.x, object.y))) === key && object.hp !== undefined && object.hp !== object.maxHp)
+      .map((object) => [object.id, object.hp!]));
+    const enemyHp = Object.fromEntries(state.enemies
+      .filter((enemy) => (enemy.chunkKey ?? getChunkKey(getChunkCoordinate(enemy.spawnX, enemy.spawnY))) === key && enemy.hp !== enemy.maxHp)
+      .map((enemy) => [enemy.id, enemy.hp]));
+    const drops = state.worldDrops.filter((drop) => getChunkKey(getChunkCoordinate(drop.x, drop.y)) === key);
+    if (Object.keys(objectHp).length || Object.keys(enemyHp).length || drops.length) changes[key] = { objectHp, enemyHp, drops };
+    else delete changes[key];
+  }
+  return changes;
+}
+
+function applyObjectChanges(objects: WorldObject[], changes?: ChunkChanges) {
+  if (!changes) return objects;
+  return objects.map((object) => changes.objectHp[object.id] === undefined ? object : { ...object, hp: changes.objectHp[object.id] });
+}
+
+function applyEnemyChanges(enemies: AdventureEnemy[], changes?: ChunkChanges) {
+  if (!changes) return enemies;
+  return enemies.map((enemy) => changes.enemyHp[enemy.id] === undefined ? enemy : { ...enemy, hp: changes.enemyHp[enemy.id] });
+}
+
+function groupByChunk<T>(values: T[], getKey: (value: T) => string) {
+  const groups: Record<string, T[]> = {};
+  for (const value of values) (groups[getKey(value)] ??= []).push(value);
+  return groups;
+}
 
 export function tickAdventureState(
   state: AdventureState,
@@ -252,9 +489,13 @@ export function tickAdventureState(
     input.aim,
     deltaSeconds,
     (PLAYER_MOVE_SPEED + (getOutfit(state.character.outfitId).speedBonus ?? 0) + skillModifiers.moveSpeed + hasteBonus) * skillModifiers.moveSpeedMultiplier,
+    state.dungeon?.walkable,
   );
   let enemies = state.enemies.map((enemy) => ({ ...enemy }));
   let worldObjects = state.worldObjects;
+  let worldDrops = state.worldDrops;
+  let inventory = state.inventory;
+  let coins = state.coins;
   const effects = state.effects.filter((effect) => now - effect.born < getEffectLife(effect));
   let propParticles = state.propParticles.filter((particle) => now - particle.born < particle.life);
   const projectiles: Projectile[] = [];
@@ -264,10 +505,10 @@ export function tickAdventureState(
   enemies = enemies.map((enemy) => {
     if (enemy.hp <= 0 || enemy.aggroRadius <= 0) return enemy;
     const distance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
-    if (distance > enemy.aggroRadius) return returnEnemyToSpawn(enemy, state.worldObjects, deltaSeconds);
+    if (distance > enemy.aggroRadius) return returnEnemyToSpawn(enemy, state.worldObjects, deltaSeconds, state.dungeon?.walkable);
     const facing = player.x < enemy.x ? 'left' : 'right';
     if (distance > enemy.attackRange + player.radius) {
-      return { ...moveEnemyToward(enemy, player, state.worldObjects, deltaSeconds), facing };
+      return { ...moveEnemyToward(enemy, player, state.worldObjects, deltaSeconds, state.dungeon?.walkable), facing };
     }
     if (now < enemy.attackReadyAt) return { ...enemy, facing };
     player = { ...player, hp: Math.max(0, player.hp - enemy.attack) };
@@ -312,6 +553,9 @@ export function tickAdventureState(
       if (!hit.invulnerable && hit.hp > 0 && hit.hp - next.damage <= 0) {
         effects.push(makeEnemyDeathEffect(nextEntityId, hit, now));
         nextEntityId += 1;
+        const spawned = makeWorldDrops(nextEntityId, hit.x, hit.y, hit.loot, now);
+        worldDrops = [...worldDrops, ...spawned];
+        nextEntityId += spawned.length;
       }
     } else if (objectHit) {
       combatTarget = { kind: 'prop', id: objectHit.id };
@@ -325,25 +569,132 @@ export function tickAdventureState(
       nextEntityId += 1;
       effects.push(makeDamageEffect(nextEntityId, objectHit.x, objectHit.y, next.damage, getQueuedDamageBorn(effects, objectHit.x, objectHit.y, now)));
       nextEntityId += 1;
+      if (destroyed) {
+        const spawned = makeWorldDrops(nextEntityId, objectHit.x, objectHit.y, objectHit.loot, now);
+        worldDrops = [...worldDrops, ...spawned];
+        nextEntityId += spawned.length;
+      }
     } else if (next.remainingDistance > 0 && isInsideWorld(next.x, next.y)) {
       projectiles.push(next);
     }
   }
 
-  return {
+  const collected = collectWorldDrops(worldDrops, player, inventory, coins, now);
+
+  const nextState = {
     ...state,
     player,
+    inventory: collected.inventory,
+    coins: collected.coins,
     enemies,
     worldObjects,
+    worldDrops: collected.worldDrops,
     projectiles,
     effects,
     propParticles,
     itemFlash: state.itemFlash.filter((flash) => now - flash.born < 420),
     weaponFlash: state.weaponFlash.filter((flash) => now - flash.born < 420),
     lastTick: now,
+    simulationTick: state.simulationTick + 1,
     nextEntityId,
     combatTarget,
+    dungeon: state.dungeon ? { ...state.dungeon, enemies } : undefined,
   };
+  return state.scene === 'dungeon' ? nextState : streamAdventureChunks(nextState, now);
+}
+
+export function interactWithAdventure(state: AdventureState, now: number): AdventureState {
+  if (state.scene === 'overworld') {
+    const location = getNearbyLocation(state);
+    if (!location) return state;
+    const dungeon = generateDungeon(location.dungeonId, location.id, state.mapSeed, now);
+    const overworldReturn: OverworldReturnState = {
+      loadedChunks: state.loadedChunks,
+      loadedChunkKeys: state.loadedChunkKeys,
+      chunkChanges: state.chunkChanges,
+      biomeTiles: state.biomeTiles,
+      worldAreas: state.worldAreas,
+      worldLocations: state.worldLocations,
+      worldDrops: state.worldDrops,
+      enemies: state.enemies,
+      worldObjects: state.worldObjects,
+      combatTarget: state.combatTarget,
+      player: state.player,
+    };
+    return {
+      ...state,
+      scene: 'dungeon',
+      dungeon,
+      overworldReturn,
+      biomeTiles: [],
+      worldAreas: [],
+      worldLocations: [],
+      worldDrops: [],
+      enemies: dungeon.enemies,
+      worldObjects: [],
+      projectiles: [],
+      effects: [],
+      propParticles: [],
+      player: { ...state.player, ...dungeon.spawn },
+      combatTarget: undefined,
+      lastTick: now,
+    };
+  }
+
+  if (!state.dungeon || !state.overworldReturn) return state;
+  if (Math.hypot(state.player.x - state.dungeon.exit.x, state.player.y - state.dungeon.exit.y) <= 95) {
+    return {
+      ...state,
+      scene: 'overworld',
+      dungeon: undefined,
+      overworldReturn: undefined,
+      ...state.overworldReturn,
+      projectiles: [],
+      effects: [],
+      propParticles: [],
+      lastTick: now,
+    };
+  }
+
+  const chest = state.dungeon.chests.find((candidate) => !candidate.opened && Math.hypot(state.player.x - candidate.x, state.player.y - candidate.y) <= 92);
+  if (!chest) return state;
+  const definition = getDungeonDefinition(state.dungeon.definitionId);
+  const rolls = randomRange(definition.chestRolls, hashRuntimeId(chest.id));
+  let nextEntityId = state.nextEntityId;
+  const worldDrops = [...state.worldDrops];
+  for (let index = 0; index < rolls; index += 1) {
+    const angle = Math.PI * 2 * index / Math.max(1, rolls) - Math.PI / 2;
+    const distance = 72 + (index % 2) * 26;
+    const random = makeDeterministicRandom(hashRuntimeId(chest.id) + index * 97);
+    const spawned = makeChestRollDrops(nextEntityId, chest.x + Math.cos(angle) * distance, chest.y + Math.sin(angle) * distance, definition.chestLoot, now + index * 90, random);
+    worldDrops.push(...spawned);
+    nextEntityId += Math.max(1, spawned.length);
+  }
+  return {
+    ...state,
+    dungeon: { ...state.dungeon, chests: state.dungeon.chests.map((candidate) => candidate.id === chest.id ? { ...candidate, opened: true } : candidate) },
+    worldDrops,
+    nextEntityId,
+  };
+}
+
+export function getAdventureInteractionPrompt(state: AdventureState) {
+  if (state.scene === 'overworld') {
+    const location = getNearbyLocation(state);
+    return location ? '[E] Enter' : undefined;
+  }
+  if (!state.dungeon) return undefined;
+  if (Math.hypot(state.player.x - state.dungeon.exit.x, state.player.y - state.dungeon.exit.y) <= 95) return '[E] Exit';
+  const chest = state.dungeon.chests.find((candidate) => !candidate.opened && Math.hypot(state.player.x - candidate.x, state.player.y - candidate.y) <= 92);
+  return chest ? '[E] Open' : undefined;
+}
+
+export function debugTeleportPlayer(state: AdventureState, x: number, y: number): AdventureState {
+  return { ...state, player: { ...state.player, x, y } };
+}
+
+function getNearbyLocation(state: AdventureState) {
+  return state.worldLocations.find((location) => Math.hypot(state.player.x - location.x, state.player.y - location.y) <= location.radius + 70);
 }
 
 export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: number; y: number }, now: number): AdventureState {
@@ -365,6 +716,7 @@ export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: 
     const impact = hits[0] ? getClosestBorderPoint(state.player, hits[0], hits[0].radius) : hitCenter;
     const effects = [...state.effects, makeHitEffect(state.nextEntityId, impact.x, impact.y, weapon, now)];
     const propParticles = [...state.propParticles];
+    let worldDrops = state.worldDrops;
     const combatTarget: CombatTarget | undefined = hits[0]
       ? { kind: 'enemy', id: hits[0].id }
       : objectHits[0]
@@ -377,6 +729,9 @@ export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: 
       if (!hit.invulnerable && hit.hp > 0 && hit.hp - attackWeapon.damage <= 0) {
         effects.push(makeEnemyDeathEffect(nextEntityId, hit, now));
         nextEntityId += 1;
+        const spawned = makeWorldDrops(nextEntityId, hit.x, hit.y, hit.loot, now);
+        worldDrops = [...worldDrops, ...spawned];
+        nextEntityId += spawned.length;
       }
     }
     for (const hit of objectHits) {
@@ -386,6 +741,11 @@ export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: 
       nextEntityId += particles.length;
       effects.push(makeDamageEffect(nextEntityId, hit.x, hit.y, attackWeapon.damage, getQueuedDamageBorn(effects, hit.x, hit.y, now)));
       nextEntityId += 1;
+      if (destroyed) {
+        const spawned = makeWorldDrops(nextEntityId, hit.x, hit.y, hit.loot, now);
+        worldDrops = [...worldDrops, ...spawned];
+        nextEntityId += spawned.length;
+      }
     }
     return {
       ...state,
@@ -395,6 +755,7 @@ export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: 
       weaponFlash,
       effects,
       propParticles,
+      worldDrops,
       nextEntityId,
       combatTarget,
     };
@@ -475,7 +836,7 @@ export function applyTraitToWeaponByItemNo(state: AdventureState, traitItemNo: n
 
 export function usePotionByItemNo(state: AdventureState, itemNo: number, now: number): AdventureState {
   const potion = state.inventory.potions.find((item) => item.itemNo === itemNo && item.count > 0);
-  if (!potion) return state;
+  if (!potion || now < (state.potionReadyAt[potion.itemId] ?? 0)) return state;
   return {
     ...state,
     player: { ...state.player, hp: Math.min(state.player.maxHp, state.player.hp + potion.heal) },
@@ -485,6 +846,44 @@ export function usePotionByItemNo(state: AdventureState, itemNo: number, now: nu
         .map((item) => (item.itemNo === itemNo ? { ...item, count: item.count - 1 } : item))
         .filter((item) => item.count > 0),
     },
+    potionReadyAt: { ...state.potionReadyAt, [potion.itemId]: now + potion.cooldownMs },
+  };
+}
+
+export function dropLootAtPlayer(state: AdventureState, itemId: string, now: number): AdventureState {
+  getAdventureItem(itemId);
+  const position = getDebugDropPosition(state.player);
+  return {
+    ...state,
+    worldDrops: [...state.worldDrops, {
+      id: `drop-${String(state.nextEntityId).padStart(2, '0')}`,
+      kind: 'item',
+      x: position.x,
+      y: position.y,
+      born: now,
+      itemId,
+    }],
+    nextEntityId: state.nextEntityId + 1,
+  };
+}
+
+export function dropCoinsAtPlayer(state: AdventureState, amount: number, now: number): AdventureState {
+  const coinAmount = Math.max(0, Math.floor(amount));
+  if (coinAmount <= 0) return state;
+  const position = getDebugDropPosition(state.player);
+  const drops = makeCoinDrops(state.nextEntityId, position.x, position.y, coinAmount, now);
+  return {
+    ...state,
+    worldDrops: [...state.worldDrops, ...drops],
+    nextEntityId: state.nextEntityId + drops.length,
+  };
+}
+
+function getDebugDropPosition(player: Actor) {
+  const distance = player.radius + 82;
+  return {
+    x: player.x + (player.facing === 'left' ? -distance : distance),
+    y: player.y + 8,
   };
 }
 
@@ -579,7 +978,7 @@ export function activateSkill(state: AdventureState, skillId: string, aim: { x: 
     };
   }
   if (effect.kind === 'blink') {
-    const player = blinkPlayer(state.player, aim, state.worldObjects, effect.distance);
+    const player = blinkPlayer(state.player, aim, state.worldObjects, effect.distance, state.dungeon?.walkable);
     return {
       ...state,
       player,
@@ -682,7 +1081,7 @@ function getActiveHasteBonus(state: AdventureState) {
   }, 0);
 }
 
-function blinkPlayer(player: Actor, aim: { x: number; y: number }, worldObjects: WorldObject[], distance: number): Actor {
+function blinkPlayer(player: Actor, aim: { x: number; y: number }, worldObjects: WorldObject[], distance: number, walkable?: DungeonRect[]): Actor {
   const direction = normalizedVector(player, aim);
   const requestedDistance = Math.min(distance, Math.hypot(aim.x - player.x, aim.y - player.y));
   const blockers = worldObjects.filter((object) => object.blocking && object.hp !== 0);
@@ -690,15 +1089,15 @@ function blinkPlayer(player: Actor, aim: { x: number; y: number }, worldObjects:
   const steps = Math.max(1, Math.ceil(requestedDistance / 12));
   for (let step = 1; step <= steps; step += 1) {
     const traveled = requestedDistance * step / steps;
-    const x = clamp(player.x + direction.x * traveled, 40, adventureWorld.width - 40);
-    const y = clamp(player.y + direction.y * traveled, 40, adventureWorld.height - 40);
-    if (blockers.some((object) => circleIntersectsObject(x, y, player.radius, object))) break;
+    const x = player.x + direction.x * traveled;
+    const y = player.y + direction.y * traveled;
+    if (blockers.some((object) => circleIntersectsObject(x, y, player.radius, object)) || !isInsideWalkableArea(x, y, player.radius, walkable)) break;
     result = { ...player, x, y, facing: direction.x < 0 ? 'left' : 'right' };
   }
   return result;
 }
 
-function movePlayer(player: Actor, worldObjects: WorldObject[], keys: Set<string>, aim: { x: number; y: number }, deltaSeconds: number, speed: number): Actor {
+function movePlayer(player: Actor, worldObjects: WorldObject[], keys: Set<string>, aim: { x: number; y: number }, deltaSeconds: number, speed: number, walkable?: DungeonRect[]): Actor {
   let dx = 0;
   let dy = 0;
   if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
@@ -706,11 +1105,11 @@ function movePlayer(player: Actor, worldObjects: WorldObject[], keys: Set<string
   if (keys.has('w') || keys.has('arrowup')) dy -= 1;
   if (keys.has('s') || keys.has('arrowdown')) dy += 1;
   const length = Math.hypot(dx, dy) || 1;
-  const targetX = clamp(player.x + (dx / length) * speed * deltaSeconds, 40, adventureWorld.width - 40);
-  const targetY = clamp(player.y + (dy / length) * speed * deltaSeconds, 40, adventureWorld.height - 40);
+  const targetX = player.x + (dx / length) * speed * deltaSeconds;
+  const targetY = player.y + (dy / length) * speed * deltaSeconds;
   const activeBlockers = worldObjects.filter((object) => object.blocking && object.hp !== 0);
-  const x = activeBlockers.some((object) => circleIntersectsObject(targetX, player.y, player.radius, object)) ? player.x : targetX;
-  const y = activeBlockers.some((object) => circleIntersectsObject(x, targetY, player.radius, object)) ? player.y : targetY;
+  const x = activeBlockers.some((object) => circleIntersectsObject(targetX, player.y, player.radius, object)) || !isInsideWalkableArea(targetX, player.y, player.radius, walkable) ? player.x : targetX;
+  const y = activeBlockers.some((object) => circleIntersectsObject(x, targetY, player.radius, object)) || !isInsideWalkableArea(x, targetY, player.radius, walkable) ? player.y : targetY;
   return { ...player, x, y, facing: aim.x < player.x ? 'left' : 'right' };
 }
 
@@ -829,28 +1228,44 @@ function damageEnemy(enemies: AdventureEnemy[], enemyId: string, damage: number)
   return enemies.map((enemy) => (enemy.id === enemyId ? damageEnemyActor(enemy, damage) : enemy));
 }
 
+function hashRuntimeId(value: string) {
+  let hash = 2166136261;
+  for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  return hash >>> 0;
+}
+
+function makeDeterministicRandom(seed: number) {
+  let salt = 0;
+  return () => seededParticle(seed + salt++ * 101);
+}
+
 function damageEnemyActor(enemy: AdventureEnemy, damage: number) {
   if (enemy.invulnerable && enemy.hp - damage <= 0) return { ...enemy, hp: enemy.maxHp };
   return { ...enemy, hp: Math.max(0, enemy.hp - damage) };
 }
 
-function moveEnemyToward(enemy: AdventureEnemy, target: { x: number; y: number }, objects: WorldObject[], deltaSeconds: number) {
+function moveEnemyToward(enemy: AdventureEnemy, target: { x: number; y: number }, objects: WorldObject[], deltaSeconds: number, walkable?: DungeonRect[]) {
   const dx = target.x - enemy.x;
   const dy = target.y - enemy.y;
   const length = Math.hypot(dx, dy) || 1;
-  return moveEnemy(enemy, enemy.x + dx / length * enemy.speed * deltaSeconds, enemy.y + dy / length * enemy.speed * deltaSeconds, objects);
+  return moveEnemy(enemy, enemy.x + dx / length * enemy.speed * deltaSeconds, enemy.y + dy / length * enemy.speed * deltaSeconds, objects, walkable);
 }
 
-function returnEnemyToSpawn(enemy: AdventureEnemy, objects: WorldObject[], deltaSeconds: number) {
+function returnEnemyToSpawn(enemy: AdventureEnemy, objects: WorldObject[], deltaSeconds: number, walkable?: DungeonRect[]) {
   if (Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY) < 8) return enemy;
-  return moveEnemyToward(enemy, { x: enemy.spawnX, y: enemy.spawnY }, objects, deltaSeconds);
+  return moveEnemyToward(enemy, { x: enemy.spawnX, y: enemy.spawnY }, objects, deltaSeconds, walkable);
 }
 
-function moveEnemy(enemy: AdventureEnemy, targetX: number, targetY: number, objects: WorldObject[]) {
+function moveEnemy(enemy: AdventureEnemy, targetX: number, targetY: number, objects: WorldObject[], walkable?: DungeonRect[]) {
   const blockers = objects.filter((object) => object.blocking && object.hp !== 0);
-  const x = blockers.some((object) => circleIntersectsObject(targetX, enemy.y, enemy.radius, object)) ? enemy.x : targetX;
-  const y = blockers.some((object) => circleIntersectsObject(x, targetY, enemy.radius, object)) ? enemy.y : targetY;
+  const x = blockers.some((object) => circleIntersectsObject(targetX, enemy.y, enemy.radius, object)) || !isInsideWalkableArea(targetX, enemy.y, enemy.radius, walkable) ? enemy.x : targetX;
+  const y = blockers.some((object) => circleIntersectsObject(x, targetY, enemy.radius, object)) || !isInsideWalkableArea(x, targetY, enemy.radius, walkable) ? enemy.y : targetY;
   return { ...enemy, x, y };
+}
+
+function isInsideWalkableArea(x: number, y: number, radius: number, walkable?: DungeonRect[]) {
+  if (!walkable) return true;
+  return walkable.some((rect) => x - radius >= rect.x && x + radius <= rect.x + rect.width && y - radius >= rect.y && y + radius <= rect.y + rect.height);
 }
 
 function normalizedVector(from: { x: number; y: number }, to: { x: number; y: number }) {
@@ -924,8 +1339,89 @@ function createInitialInventory(): AdventureInventory {
       { itemNo: 104, traitId: 'augmentation-08', count: 2 },
       { itemNo: 105, traitId: 'augmentation-09', count: 2 },
     ],
-    potions: [{ itemNo: 201, name: 'Small Potion', icon: '🧪', count: 3, heal: 35 }],
+    potions: [makePotionStack('item-02', 201, 3)],
   };
+}
+
+function makePotionStack(itemId: string, itemNo: number, count: number): PotionStack {
+  const item = getAdventureItem(itemId);
+  return { itemNo, itemId, name: item.name, icon: item.icon, rank: item.rank, count, heal: item.heal, cooldownMs: item.cooldownMs };
+}
+
+function makeWorldDrops(startId: number, x: number, y: number, table: LootTable | undefined, now: number, random = makeDeterministicRandom(startId)): WorldDrop[] {
+  const rolled = rollLootTable(table, random);
+  const drops = makeCoinDrops(startId, x - 15, y + 5, rolled.coins, now);
+  if (rolled.itemId) {
+    drops.push({ id: `drop-${String(startId + drops.length).padStart(2, '0')}`, kind: 'item', x: x + 15, y: y - 5, born: now, itemId: rolled.itemId });
+  }
+  return drops;
+}
+
+function makeChestRollDrops(startId: number, x: number, y: number, table: LootTable, now: number, random: () => number): WorldDrop[] {
+  const rolled = rollLootTable(table, random);
+  const drops: WorldDrop[] = [];
+  if (rolled.coins > 0) drops.push({ id: `drop-${String(startId).padStart(2, '0')}`, kind: 'coin', x: x - 14, y: y + 6, born: now, amount: rolled.coins });
+  if (rolled.itemId) drops.push({ id: `drop-${String(startId + drops.length).padStart(2, '0')}`, kind: 'item', x: x + 14, y: y - 6, born: now + 45, itemId: rolled.itemId });
+  return drops;
+}
+
+function makeCoinDrops(startId: number, x: number, y: number, amount: number, now: number): WorldDrop[] {
+  const values = decomposeCoinValues(amount);
+  const columns = Math.min(5, values.length);
+  return values.map((value, index) => {
+    const row = Math.floor(index / columns);
+    const rowCount = Math.min(columns, values.length - row * columns);
+    const column = index % columns;
+    return {
+      id: `drop-${String(startId + index).padStart(2, '0')}`,
+      kind: 'coin',
+      x: x + (column - (rowCount - 1) / 2) * 22,
+      y: y + row * 20 + (index % 2 === 0 ? -3 : 3),
+      born: now + index * 35,
+      amount: value,
+    };
+  });
+}
+
+function decomposeCoinValues(amount: number) {
+  let remaining = Math.max(0, Math.floor(amount));
+  const values: number[] = [];
+  while (remaining >= 10) {
+    values.push(10);
+    remaining -= 10;
+  }
+  while (remaining >= 5) {
+    values.push(5);
+    remaining -= 5;
+  }
+  while (remaining > 0) {
+    values.push(1);
+    remaining -= 1;
+  }
+  return values;
+}
+
+function collectWorldDrops(worldDrops: WorldDrop[], player: Actor, inventory: AdventureInventory, coins: number, now: number) {
+  let nextInventory = inventory;
+  let nextCoins = coins;
+  const remaining: WorldDrop[] = [];
+  for (const drop of worldDrops) {
+    if (now - drop.born < 1200 || Math.hypot(drop.x - player.x, drop.y - player.y) > player.radius + 28) {
+      remaining.push(drop);
+      continue;
+    }
+    if (drop.kind === 'coin') {
+      nextCoins += drop.amount ?? 0;
+      continue;
+    }
+    if (!drop.itemId) continue;
+    const existing = nextInventory.potions.find((item) => item.itemId === drop.itemId);
+    const potions = existing
+      ? nextInventory.potions.map((item) => item.itemId === drop.itemId ? { ...item, count: item.count + 1 } : item)
+      : [...nextInventory.potions, makePotionStack(drop.itemId, Math.max(200, ...nextInventory.potions.map((item) => item.itemNo)) + 1, 1)];
+    nextInventory = { ...nextInventory, potions };
+  }
+  return { worldDrops: remaining, inventory: nextInventory, coins: nextCoins };
 }
 
 function addTraitStack(stacks: TraitStack[], traitId: string) {
@@ -972,7 +1468,7 @@ function roundStat(value: number) {
 }
 
 function isInsideWorld(x: number, y: number) {
-  return x >= 0 && x <= adventureWorld.width && y >= 0 && y <= adventureWorld.height;
+  return Number.isFinite(x) && Number.isFinite(y);
 }
 
 function clamp(value: number, min: number, max: number) {

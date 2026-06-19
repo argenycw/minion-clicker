@@ -4,6 +4,8 @@ import {
   createInitialAdventureState,
   customizeCharacter,
   disposeInventoryItem,
+  dropLootAtPlayer,
+  dropCoinsAtPlayer,
   equipPotionToSlot,
   equipSkillToSlot,
   equipOutfit,
@@ -14,9 +16,14 @@ import {
   usePotionByItemNo,
   unlockSkill,
   useHotbarSlot,
+  interactWithAdventure,
+  debugTeleportPlayer,
+  syncLegacyFieldsToPlayers,
+  useAdventurePlayerAsLocal,
   type AdventureState,
   type HandSlot,
 } from './state';
+import { commandToKeySet, type AdventureCommand } from './commands';
 
 export type AdventureAction =
   | { type: 'tick'; now: number; keys: Set<string>; aim: { x: number; y: number } }
@@ -33,9 +40,18 @@ export type AdventureAction =
   | { type: 'removeTrait'; weaponInstanceId: string; index: number }
   | { type: 'usePotion'; itemNo: number; now: number }
   | { type: 'dispose'; kind: 'weapon' | 'trait' | 'potion'; itemNo: number }
+  | { type: 'dropLoot'; itemId: string; now: number }
+  | { type: 'dropCoins'; amount: number; now: number }
+  | { type: 'interact'; now: number }
+  | { type: 'debugTeleport'; x: number; y: number }
+  | { type: 'command'; command: AdventureCommand; now: number }
   | { type: 'reset' };
 
 export function adventureReducer(state: AdventureState, action: AdventureAction): AdventureState {
+  return syncLegacyFieldsToPlayers(reduceAdventureAction(state, action));
+}
+
+function reduceAdventureAction(state: AdventureState, action: AdventureAction): AdventureState {
   if (action.type === 'tick') return tickAdventureState(state, action.now, action);
   if (action.type === 'activate') return activateWeapon(state, action.hand, action.aim, action.now);
   if (action.type === 'hotbar') return useHotbarSlot(state, action.slot, action.aim, action.now);
@@ -50,5 +66,36 @@ export function adventureReducer(state: AdventureState, action: AdventureAction)
   if (action.type === 'removeTrait') return removeTraitFromWeapon(state, action.weaponInstanceId, action.index);
   if (action.type === 'usePotion') return usePotionByItemNo(state, action.itemNo, action.now);
   if (action.type === 'dispose') return disposeInventoryItem(state, action.kind === 'potion' ? 'potion' : action.kind, action.itemNo);
-  return createInitialAdventureState();
+  if (action.type === 'dropLoot') return dropLootAtPlayer(state, action.itemId, action.now);
+  if (action.type === 'dropCoins') return dropCoinsAtPlayer(state, action.amount, action.now);
+  if (action.type === 'interact') return interactWithAdventure(state, action.now);
+  if (action.type === 'debugTeleport') return debugTeleportPlayer(state, action.x, action.y);
+  if (action.type === 'command') return applyAdventureCommand(state, action.command, action.now);
+  return createInitialAdventureState({ now: performance.now() });
+}
+
+function applyAdventureCommand(state: AdventureState, command: AdventureCommand, now: number): AdventureState {
+  const scoped = useAdventurePlayerAsLocal(state, command.playerId);
+  if (scoped.localPlayerId !== command.playerId) return state;
+  const restoreLocalPlayer = (next: AdventureState) => useAdventurePlayerAsLocal(syncLegacyFieldsToPlayers(next), state.localPlayerId);
+  if (command.type === 'input') {
+    return restoreLocalPlayer(tickAdventureState(scoped, now, {
+      keys: commandToKeySet(command),
+      aim: { x: command.aimX, y: command.aimY },
+    }));
+  }
+  if (command.type === 'attack') return restoreLocalPlayer(activateWeapon(scoped, command.hand, { x: command.aimX, y: command.aimY }, now));
+  if (command.type === 'hotbar') return restoreLocalPlayer(useHotbarSlot(scoped, command.slot, { x: command.aimX, y: command.aimY }, now));
+  if (command.type === 'interact') return restoreLocalPlayer(interactWithAdventure(scoped, now));
+  if (command.type === 'equipItem') return restoreLocalPlayer(equipPotionToSlot(scoped, command.itemNo, command.slot));
+  if (command.type === 'equipSkill') return restoreLocalPlayer(equipSkillToSlot(scoped, command.skillId, command.slot));
+  if (command.type === 'unlockSkill') return restoreLocalPlayer(unlockSkill(scoped, command.skillId));
+  if (command.type === 'customizeCharacter') return restoreLocalPlayer(customizeCharacter(scoped, command.changes));
+  if (command.type === 'equipOutfit') return restoreLocalPlayer(equipOutfit(scoped, command.outfitId));
+  if (command.type === 'equipWeapon') return restoreLocalPlayer(equipWeapon(scoped, command.hand, command.weaponInstanceId));
+  if (command.type === 'unequipWeapon') return restoreLocalPlayer(unequipWeapon(scoped, command.hand));
+  if (command.type === 'applyTrait') return restoreLocalPlayer(applyTraitToWeapon(scoped, command.traitId, command.weaponInstanceId));
+  if (command.type === 'removeTrait') return restoreLocalPlayer(removeTraitFromWeapon(scoped, command.weaponInstanceId, command.index));
+  if (command.type === 'usePotion') return restoreLocalPlayer(usePotionByItemNo(scoped, command.itemNo, now));
+  return restoreLocalPlayer(disposeInventoryItem(scoped, command.kind === 'potion' ? 'potion' : command.kind, command.itemNo));
 }

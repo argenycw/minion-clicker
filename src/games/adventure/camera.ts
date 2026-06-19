@@ -81,12 +81,8 @@ export function screenToWorld(canvas: HTMLCanvasElement, camera: AdventureCamera
 }
 
 function clampCamera(camera: AdventureCamera, canvas: HTMLCanvasElement): AdventureCamera {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    ...camera,
-    x: clamp(camera.x, -GAME_SETTINGS.map.cameraOverscroll, adventureWorld.width - rect.width / camera.zoom + GAME_SETTINGS.map.cameraOverscroll),
-    y: clamp(camera.y, -GAME_SETTINGS.map.cameraOverscroll, adventureWorld.height - rect.height / camera.zoom + GAME_SETTINGS.map.cameraOverscroll),
-  };
+  void canvas;
+  return camera;
 }
 
 function touchCenter(points: Map<number, { x: number; y: number }>) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react';
-import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Coins, Crosshair, FlaskConical, Hammer, HandCoins, HeartPulse, RotateCcw, Swords, Trophy, Upload, UserMinus, UsersRound, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Coins, Crosshair, FlaskConical, Hammer, HandCoins, HeartPulse, RotateCcw, Settings, Swords, Trophy, Upload, UserMinus, UsersRound, X } from 'lucide-react';
 import { Battlefield } from './components/Battlefield';
 import { ShopCard } from './components/ShopCard';
 import {
@@ -38,6 +38,7 @@ import {
 } from './state';
 import { GAME_SETTINGS } from '../../shared/settings';
 import { resolveLegacyCastleId, resolveLegacyMinionId, resolveLegacyTechnologyId } from '../../shared/idMigration';
+import { GraphicsSettingsPanel, useGraphicsSettings } from '../../shared/graphicsSettings';
 import {
   clearCustomTech,
   loadCustomTech,
@@ -169,7 +170,8 @@ const reducer = (state: GameState, action: Action): GameState => {
 export function App() {
   const [state, dispatch] = useReducer(reducer, undefined, loadState);
   const [shopOpen, setShopOpen] = useState(true);
-  const [shopTab, setShopTab] = useState<'combat' | 'worker' | 'tech'>('combat');
+  const [shopTab, setShopTab] = useState<'combat' | 'worker' | 'tech' | 'settings'>('combat');
+  const [graphics, updateGraphics] = useGraphicsSettings();
   const [importError, setImportError] = useState<string>();
   const [treasuryPops, setTreasuryPops] = useState<Array<{ id: number; amount: number; x: number }>>([]);
   const stats = useMemo(() => getStats(state), [state]);
@@ -196,13 +198,20 @@ export function App() {
 
   useEffect(() => {
     let frame = 0;
+    let lastTick = performance.now();
+    const tickMs = 1000 / graphics.fps;
     const loop = (now: number) => {
-      dispatch({ type: 'tick', now });
+      if (document.visibilityState === 'visible' && now - lastTick >= tickMs) {
+        dispatch({ type: 'tick', now });
+        lastTick = now - ((now - lastTick) % tickMs);
+      } else if (document.visibilityState !== 'visible') {
+        lastTick = now;
+      }
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [graphics.fps]);
 
   useEffect(() => {
     const now = performance.now();
@@ -295,6 +304,7 @@ export function App() {
       <section className={`game-stage ${shopOpen ? 'shop-visible' : ''}`}>
         <Battlefield
           state={state}
+          graphics={graphics}
           onSelectUnit={(unitId) => dispatch({ type: 'select', unitId })}
           onSelectUnits={(unitIds) => dispatch({ type: 'selectUnits', unitIds })}
           onSelectCastle={(castleId) => dispatch({ type: 'selectCastle', castleId })}
@@ -448,10 +458,16 @@ export function App() {
               <FlaskConical size={17} />
               Tech
             </button>
+            <button className={shopTab === 'settings' ? 'active' : ''} type="button" onClick={() => setShopTab('settings')}>
+              <Settings size={17} />
+              Settings
+            </button>
           </div>
 
-          <section className="shop-panel">
-            {shopTab === 'tech'
+          <section className={`shop-panel ${shopTab === 'settings' ? 'settings-panel' : ''}`}>
+            {shopTab === 'settings'
+              ? <GraphicsSettingsPanel settings={graphics} onChange={updateGraphics} />
+              : shopTab === 'tech'
               ? (
                 <>
                   {technologies.map((tech) => (

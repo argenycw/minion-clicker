@@ -279,10 +279,11 @@ const mergedMinions = [
 export const unitDefinitions: UnitDefinition[] = mergedMinions.map(({ minion, source }) => normalizeMinion(minion, source));
 export const combatMinions = unitDefinitions.filter((unit) => unit.kind === 'combat').sort((a, b) => a.cost - b.cost);
 export const workerMinions = unitDefinitions.filter((unit) => unit.kind === 'worker').sort((a, b) => a.cost - b.cost);
+const unitDefinitionsById = new Map(unitDefinitions.map((definition) => [definition.id, definition]));
 
 export const getUnit = (id: string) => {
   const resolvedId = resolveLegacyMinionId(id);
-  const unit = unitDefinitions.find((definition) => definition.id === resolvedId);
+  const unit = unitDefinitionsById.get(resolvedId);
   if (!unit) throw new Error(`Unknown unit: ${id}`);
   return unit;
 };

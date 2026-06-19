@@ -2,6 +2,7 @@
   {
     "id": "augmentation-01",
     "name": "Attack Up I",
+    "rank": "C",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
@@ -11,6 +12,7 @@
   {
     "id": "augmentation-02",
     "name": "Attack Up II",
+    "rank": "B",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
@@ -20,6 +22,7 @@
   {
     "id": "augmentation-03",
     "name": "Attack Up III",
+    "rank": "A",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
@@ -29,6 +32,7 @@
   {
     "id": "augmentation-04",
     "name": "Quicken I",
+    "rank": "C",
     "icon": "⚡︎",
     "color": "#efb33f",
     "family": "utility",
@@ -38,6 +42,7 @@
   {
     "id": "augmentation-05",
     "name": "Quicken II",
+    "rank": "B",
     "icon": "⚡︎",
     "color": "#efb33f",
     "family": "utility",
@@ -47,6 +52,7 @@
   {
     "id": "augmentation-06",
     "name": "Reach I",
+    "rank": "C",
     "icon": "➚",
     "color": "#efb33f",
     "family": "utility",
@@ -56,6 +62,7 @@
   {
     "id": "augmentation-07",
     "name": "Reach II",
+    "rank": "B",
     "icon": "➚",
     "color": "#efb33f",
     "family": "utility",
@@ -65,6 +72,7 @@
   {
     "id": "augmentation-08",
     "name": "Scatter I",
+    "rank": "B",
     "icon": "⁂",
     "color": "#7254ba",
     "family": "magic",
@@ -74,6 +82,7 @@
   {
     "id": "augmentation-09",
     "name": "Impact I",
+    "rank": "B",
     "icon": "▲",
     "color": "#ff7d55",
     "family": "impact",

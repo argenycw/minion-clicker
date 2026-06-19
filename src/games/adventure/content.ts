@@ -1,11 +1,13 @@
 import weaponsJson from './weapons.json';
 import traitsJson from './traits.json';
+import type { ItemRank } from './loot';
 
 export type WeaponKind = 'melee' | 'projectile';
 
 export type WeaponDefinition = {
   id: string;
   name: string;
+  rank: ItemRank;
   handGlyph: string;
   activeGlyph?: string;
   kind: WeaponKind;
@@ -26,6 +28,7 @@ export type WeaponDefinition = {
 export type TraitDefinition = {
   id: string;
   name: string;
+  rank: ItemRank;
   icon: string;
   color: string;
   family: 'attack' | 'defense' | 'utility' | 'magic' | 'impact';
@@ -42,6 +45,7 @@ function validateWeapon(input: unknown): WeaponDefinition {
   if (!weapon || typeof weapon !== 'object') throw new Error('Weapon must be an object.');
   if (!weapon.id || !/^[a-z0-9-]+$/i.test(weapon.id)) throw new Error('Weapon id must be a slug.');
   if (!weapon.name) throw new Error(`Weapon ${weapon.id} requires a name.`);
+  if (!isItemRank(weapon.rank)) throw new Error(`Weapon ${weapon.id} requires a valid rank.`);
   if (!weapon.handGlyph) throw new Error(`Weapon ${weapon.id} requires a handGlyph.`);
   if (weapon.kind !== 'melee' && weapon.kind !== 'projectile') throw new Error(`Weapon ${weapon.id} has an invalid kind.`);
   for (const key of ['damage', 'range', 'radius', 'attackSpeed'] as const) {
@@ -63,6 +67,7 @@ function validateWeapon(input: unknown): WeaponDefinition {
   return {
     id: weapon.id,
     name: weapon.name,
+    rank: weapon.rank,
     handGlyph: weapon.handGlyph,
     activeGlyph: weapon.activeGlyph,
     kind: weapon.kind,
@@ -98,11 +103,13 @@ function validateTrait(input: unknown): TraitDefinition {
   if (!trait || typeof trait !== 'object') throw new Error('Trait must be an object.');
   if (!trait.id || !/^[a-z0-9-]+$/i.test(trait.id)) throw new Error('Trait id must be a slug.');
   if (!trait.name) throw new Error(`Trait ${trait.id} requires a name.`);
+  if (!isItemRank(trait.rank)) throw new Error(`Trait ${trait.id} requires a valid rank.`);
   if (!trait.icon) throw new Error(`Trait ${trait.id} requires an icon.`);
   if (!trait.color) throw new Error(`Trait ${trait.id} requires a color.`);
   return {
     id: trait.id,
     name: trait.name,
+    rank: trait.rank,
     icon: trait.icon,
     color: trait.color,
     family: trait.family ?? 'utility',
@@ -113,4 +120,8 @@ function validateTrait(input: unknown): TraitDefinition {
     radiusMultiplier: trait.radiusMultiplier,
     extraProjectiles: trait.extraProjectiles,
   };
+}
+
+function isItemRank(value: unknown): value is ItemRank {
+  return value === 'D' || value === 'C' || value === 'B' || value === 'A' || value === 'S' || value === 'EX';
 }

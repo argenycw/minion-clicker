@@ -18,6 +18,15 @@ export const adventureEnemyDefinitions: AdventureEnemyDefinition[] = combatMinio
   attackSpeed: Math.max(0.35, minion.attackSpeed),
   attackRange: Math.max(48, Math.min(90, minion.range * 0.45)),
   aggroRadius: 260 + Math.min(220, minion.cost * 0.22),
+  loot: {
+    coin: { probability: 0.82, amount: [2, Math.max(3, Math.ceil(minion.cost / 35))] },
+    loot: [
+      { itemId: 'item-01', probability: 0.4 },
+      { itemId: 'item-02', probability: 0.4 },
+      { itemId: 'item-03', probability: 0.1 },
+      { itemId: 'item-04', probability: 0.1 },
+    ],
+  },
 }));
 
 export function getAdventureEnemyDefinition(id: string) {

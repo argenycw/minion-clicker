@@ -1,3 +1,5 @@
+import type { LootTable } from '../loot';
+
 export type WorldObjectKind = 'tree' | 'bush' | 'rock' | 'flower' | 'flowerbed' | 'mushroom' | 'stump' | 'dead-tree' | 'ruin-wall' | 'ruin-pillar' | 'barrel' | 'crate' | 'rubble';
 
 export type CollisionShape =
@@ -14,10 +16,12 @@ export type PropDefinition = {
   hitPieces?: [number, number];
   destroyPieces?: [number, number];
   collision?: CollisionShape;
+  loot?: LootTable;
 };
 
 export type WorldObject = {
   id: string;
+  chunkKey?: string;
   kind: WorldObjectKind;
   x: number;
   y: number;
@@ -34,6 +38,7 @@ export type WorldObject = {
   playerInside?: boolean;
   biomeId?: string;
   areaId?: string;
+  loot?: LootTable;
 };
 
 export type WorldArea = {

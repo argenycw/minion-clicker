@@ -1,9 +1,16 @@
 import { getBiome } from './definitions';
 import type { BiomeTile } from './types';
-import { createProceduralGround } from '../../../../shared/proceduralGround';
+import { createProceduralGround, createProceduralGroundRegion } from '../../../../shared/proceduralGround';
 
 export function generateBiomeTiles(width: number, height: number, spawn: { x: number; y: number }, seed = 0): BiomeTile[] {
   return createProceduralGround(width, height, spawn, seed).map((tile) => ({
+    ...tile,
+    biomeId: tile.kind === 'dry' ? 'biome-02' : 'biome-01',
+  }));
+}
+
+export function generateBiomeTilesRegion(originX: number, originY: number, width: number, height: number, spawn: { x: number; y: number }, seed = 0): BiomeTile[] {
+  return createProceduralGroundRegion(originX, originY, width, height, spawn, seed).map((tile) => ({
     ...tile,
     biomeId: tile.kind === 'dry' ? 'biome-02' : 'biome-01',
   }));

@@ -2,6 +2,9 @@
 // Change values here and the map, economy, enemies, UI, and controls adapt.
 
 export const GAME_SETTINGS = {
+  performance: {
+    cullMargin: 140,
+  },
   world: {
     width: 6000,
     height: 4000,

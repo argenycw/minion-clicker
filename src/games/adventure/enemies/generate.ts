@@ -51,6 +51,7 @@ export function generateAdventureEnemies(
       attackRange: definition.attackRange,
       aggroRadius: definition.aggroRadius,
       attackReadyAt: now + seeded(index * 101 + 43) * 900,
+      loot: definition.loot,
     });
   }
   return enemies;
