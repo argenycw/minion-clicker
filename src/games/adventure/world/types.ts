@@ -1,5 +1,6 @@
 import type { LootTable } from '../loot';
 import type { AdventureAudioCue } from '../audio/types';
+import type { SpriteRef } from '../../../shared/sprites';
 
 export type WorldObjectKind = 'tree' | 'bush' | 'rock' | 'flower' | 'flowerbed' | 'mushroom' | 'stump' | 'dead-tree' | 'ruin-wall' | 'ruin-pillar' | 'barrel' | 'crate' | 'rubble';
 
@@ -19,6 +20,7 @@ export type PropDefinition = {
   collision?: CollisionShape;
   loot?: LootTable;
   audio?: PropAudioDefinition;
+  sprite?: SpriteRef;
 };
 
 export type PropAudioDefinition = {
@@ -47,6 +49,7 @@ export type WorldObject = {
   areaId?: string;
   loot?: LootTable;
   audio?: PropAudioDefinition;
+  sprite?: SpriteRef;
 };
 
 export type WorldArea = {

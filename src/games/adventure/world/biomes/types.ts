@@ -1,4 +1,5 @@
 import type { WorldObjectKind } from '../types';
+import type { AdventureRank } from '../../progression/types';
 
 export type BiomeId = 'biome-01' | 'biome-02';
 
@@ -39,4 +40,5 @@ export type BiomeTile = {
   height: number;
   variant: number;
   blend: number;
+  rank: AdventureRank;
 };

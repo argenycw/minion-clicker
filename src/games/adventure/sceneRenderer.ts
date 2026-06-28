@@ -1,7 +1,7 @@
 import { GAME_SETTINGS } from '../../shared/settings';
 import { drawTerrainVisual } from '../../shared/terrainRenderer';
 import { getEffectiveWeapon, getEquippedWeapon, type AdventurePlayerState, type AdventureState, type CombatEffect, type EffectiveWeapon, type HandSlot, type Projectile, type PropParticle } from './state';
-import type { WorldArea, WorldObject } from './world';
+import { getAdventureWorldBounds, type WorldArea, type WorldObject } from './world';
 import { drawBiomeGround } from './world/biomes/render';
 import { ADVENTURE_CHUNK_SIZE, getChunkOrigin } from './world/chunks/coordinates';
 import type { AdventureEnemy } from './enemies/types';
@@ -12,10 +12,13 @@ import type { GraphicsSettings } from '../../shared/graphicsSettings';
 import { getAdventureItem, ITEM_RANK_COLORS, ITEM_RANK_EFFECT_COLORS } from './loot';
 import { getDungeonDefinition } from './dungeons/definitions';
 import type { DungeonChest, DungeonProp, DungeonRect } from './dungeons/types';
+import type { TownNpcDefinition } from './towns/types';
 import type { WorldLocation } from './world/locations/types';
 import type { AdventureRenderMotion } from './multiplayer/motion';
+import { getAdventureRankAtWorldPosition } from './progression/system';
 import { getStatusEffectDefinition } from './status-effects/definitions';
 import type { StatusEffectInstance } from './status-effects/types';
+import { drawSpriteRef } from '../../shared/sprites';
 
 const unitBodyHeight = 40;
 const unitBodyFont = 18;
@@ -81,7 +84,7 @@ export function drawScene(
   ctx.save();
   ctx.scale(camera.zoom, camera.zoom);
   ctx.translate(-camera.x, -camera.y);
-  drawMap(ctx, state, bounds, now, graphics.ambientEffects);
+  drawMap(ctx, state, bounds, now, graphics.ambientEffects, graphics.mapSprites);
   for (const drop of state.worldDrops) if (isPointVisible(drop, bounds, 120)) drawWorldDrop(ctx, drop, now);
   if (hoverHand) drawWeaponRange(ctx, state, hoverHand);
   for (const enemy of state.enemies) {
@@ -190,12 +193,16 @@ function getCoinKind(amount: number): CoinKind {
   return 'bronze';
 }
 
-function drawMap(ctx: CanvasRenderingContext2D, state: AdventureState, bounds: ViewBounds, now: number, ambientEffects: boolean) {
+function drawMap(ctx: CanvasRenderingContext2D, state: AdventureState, bounds: ViewBounds, now: number, ambientEffects: boolean, mapSprites: boolean) {
+  if (state.scene === 'town' && state.town) {
+    drawTownMap(ctx, state.town, state.worldObjects, bounds, now, mapSprites);
+    return;
+  }
   if (state.scene === 'dungeon' && state.dungeon) {
     drawDungeonMap(ctx, state.dungeon, bounds, now);
     for (const object of getSortedObjects(state.worldObjects)) {
       if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
-      drawWorldObject(ctx, object, now);
+      drawWorldObject(ctx, object, now, mapSprites);
     }
     return;
   }
@@ -227,12 +234,127 @@ function drawMap(ctx: CanvasRenderingContext2D, state: AdventureState, bounds: V
     ctx.lineTo(lastX, y);
     ctx.stroke();
   }
+  drawAdventureWorldEdge(ctx, bounds);
   for (const area of state.worldAreas) if (isPointVisible(area, bounds, Math.max(area.width, area.height) / 2)) drawArea(ctx, area);
   for (const object of getSortedObjects(state.worldObjects)) {
     if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
-    drawWorldObject(ctx, object, now);
+    drawWorldObject(ctx, object, now, mapSprites);
   }
-  for (const location of state.worldLocations) if (isPointVisible(location, bounds, 120)) drawWorldLocation(ctx, location, now);
+  for (const location of state.worldLocations) if (isPointVisible(location, bounds, 120)) drawWorldLocation(ctx, location, now, mapSprites);
+}
+
+function drawAdventureWorldEdge(ctx: CanvasRenderingContext2D, bounds: ViewBounds) {
+  const worldBounds = getAdventureWorldBounds();
+  const visibleLeft = bounds.left;
+  const visibleTop = bounds.top;
+  const visibleWidth = bounds.right - bounds.left;
+  const visibleHeight = bounds.bottom - bounds.top;
+
+  ctx.save();
+  ctx.fillStyle = '#465142';
+  if (bounds.left < worldBounds.left) ctx.fillRect(visibleLeft, visibleTop, worldBounds.left - visibleLeft, visibleHeight);
+  if (bounds.right > worldBounds.right) ctx.fillRect(worldBounds.right, visibleTop, bounds.right - worldBounds.right, visibleHeight);
+  if (bounds.top < worldBounds.top) ctx.fillRect(visibleLeft, visibleTop, visibleWidth, worldBounds.top - visibleTop);
+  if (bounds.bottom > worldBounds.bottom) ctx.fillRect(visibleLeft, worldBounds.bottom, visibleWidth, bounds.bottom - worldBounds.bottom);
+
+  ctx.strokeStyle = 'rgba(255, 244, 202, 0.42)';
+  ctx.lineWidth = 6;
+  ctx.setLineDash([22, 18]);
+  ctx.strokeRect(worldBounds.left, worldBounds.top, worldBounds.right - worldBounds.left, worldBounds.bottom - worldBounds.top);
+  ctx.restore();
+}
+
+function drawTownMap(
+  ctx: CanvasRenderingContext2D,
+  town: NonNullable<AdventureState['town']>,
+  worldObjects: WorldObject[],
+  bounds: ViewBounds,
+  now: number,
+  mapSprites: boolean,
+) {
+  ctx.fillStyle = '#96bd7d';
+  ctx.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+  ctx.fillStyle = '#d4bf8e';
+  ctx.strokeStyle = '#9e7c4d';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.roundRect(-town.width / 2, -town.height / 2, town.width, town.height, 34);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(112, 82, 46, 0.18)';
+  ctx.beginPath();
+  ctx.roundRect(-92, -town.height / 2 + 40, 184, town.height - 90, 24);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(-town.width / 2 + 56, -72, town.width - 112, 144, 24);
+  ctx.fill();
+
+  drawTownBuilding(ctx, -300, -175, 220, 138, 'SHOP');
+  drawTownBuilding(ctx, 280, -170, 230, 148, 'HALL');
+  drawTownBuilding(ctx, 0, 150, 260, 130, 'GATE');
+
+  for (const object of getSortedObjects(worldObjects)) {
+    if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
+    drawWorldObject(ctx, object, now, mapSprites);
+  }
+  for (const npc of [...town.npcs].sort((a, b) => a.y - b.y)) {
+    if (isPointVisible(npc, bounds, 90)) drawTownNpc(ctx, npc, now);
+  }
+  drawDungeonExit(ctx, town.exit.x, town.exit.y, now);
+}
+
+function drawTownBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, label: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(42, 33, 24, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(0, height / 2 + 14, width * 0.47, 16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c48a4a';
+  ctx.strokeStyle = '#704622';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.roundRect(-width / 2, -height / 2, width, height, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#7c4030';
+  ctx.beginPath();
+  ctx.moveTo(-width / 2 - 16, -height / 2 + 8);
+  ctx.lineTo(0, -height / 2 - 62);
+  ctx.lineTo(width / 2 + 16, -height / 2 + 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#422817';
+  ctx.fillRect(-22, height / 2 - 58, 44, 58);
+  ctx.fillStyle = '#fff0c0';
+  ctx.font = '900 18px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, 0, -height / 2 - 16);
+  ctx.restore();
+}
+
+function drawTownNpc(ctx: CanvasRenderingContext2D, npc: TownNpcDefinition, now: number) {
+  drawKaomoji(ctx, {
+    x: npc.x,
+    y: npc.y,
+    facing: npc.facing,
+    body: npc.body,
+    leftHand: npc.kind === 'merchant' ? '[' : undefined,
+    rightHand: npc.kind === 'merchant' ? ']' : undefined,
+    color: npc.color,
+    pillWidth: npc.pillWidth,
+    stroke: '#6d8158',
+    selected: false,
+    wobble: Math.sin(now / 380 + npc.x) * 0.65,
+  });
+  ctx.save();
+  ctx.fillStyle = '#493542';
+  ctx.font = '800 16px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(npc.name, npc.x, npc.y - 48);
+  ctx.restore();
 }
 
 function drawDungeonMap(ctx: CanvasRenderingContext2D, dungeon: NonNullable<AdventureState['dungeon']>, bounds: ViewBounds, now: number) {
@@ -344,15 +466,49 @@ function drawDungeonRect(ctx: CanvasRenderingContext2D, rect: DungeonRect, fill:
   ctx.stroke();
 }
 
-function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocation, now: number) {
+function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocation, now: number, mapSprites: boolean) {
   ctx.save();
   ctx.translate(location.x, location.y);
+  const rank = location.kind === 'town' ? undefined : getAdventureRankAtWorldPosition(location);
   const pulse = 1 + Math.sin(now / 500 + location.x) * 0.025;
   ctx.scale(pulse, pulse);
   ctx.fillStyle = 'rgba(27, 31, 30, 0.26)';
   ctx.beginPath();
   ctx.ellipse(0, 34, 66, 20, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (location.kind === 'town') {
+    ctx.fillStyle = '#bd7b42';
+    ctx.strokeStyle = '#704622';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.roundRect(-58, -24, 116, 68, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#7c4030';
+    ctx.beginPath();
+    ctx.moveTo(-72, -22);
+    ctx.lineTo(0, -78);
+    ctx.lineTo(72, -22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#402719';
+    ctx.fillRect(-13, 5, 26, 39);
+    ctx.fillStyle = '#f1e7c4';
+    ctx.font = '900 18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(location.name, 0, -94);
+    ctx.restore();
+    return;
+  }
+  if (mapSprites && location.kind === 'cave' && drawSpriteRef(ctx, { sheetId: 'adventure-props-01', x: 0, y: 1 }, 0, 2, 138, 138)) {
+    ctx.fillStyle = '#f1e7c4';
+    ctx.font = '900 18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${location.name} [${rank}]`, 0, -78);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = '#626b66';
   ctx.strokeStyle = '#343b38';
   ctx.lineWidth = 5;
@@ -373,7 +529,7 @@ function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocatio
   ctx.fillStyle = '#f1e7c4';
   ctx.font = '900 18px "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(location.name, 0, -78);
+  ctx.fillText(`${location.name} [${rank}]`, 0, -78);
   ctx.restore();
 }
 
@@ -461,9 +617,9 @@ function drawArea(ctx: CanvasRenderingContext2D, area: WorldArea) {
   ctx.restore();
 }
 
-function drawWorldObject(ctx: CanvasRenderingContext2D, object: WorldObject, now: number) {
+function drawWorldObject(ctx: CanvasRenderingContext2D, object: WorldObject, now: number, mapSprites: boolean) {
   if (object.hp === 0 && (object.hitAt === undefined || now - object.hitAt > 220)) return;
-  drawTerrainVisual(ctx, { ...object, destructible: object.hp !== undefined }, now);
+  drawTerrainVisual(ctx, { ...object, sprite: mapSprites ? object.sprite : undefined, destructible: object.hp !== undefined }, now);
   if (object.hp !== undefined && object.maxHp !== undefined && object.hp < object.maxHp) {
     drawHpBar(ctx, object.x - 22, object.y + object.height / 2 + 8, 44, 5, object.hp / object.maxHp, '#8b5a2b');
   }

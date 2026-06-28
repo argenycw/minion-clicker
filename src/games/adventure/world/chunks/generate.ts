@@ -1,7 +1,13 @@
 import { getAdventureEnemyDefinition } from '../../enemies/definitions';
 import type { AdventureEnemy } from '../../enemies/types';
+import {
+  getAdventureRankAtWorldPosition,
+  getMaxAdventureDungeons,
+  scaleEnemyStatsForRank,
+} from '../../progression/system';
 import { createRuin } from '../areas/ruin';
 import { authoredAdventureAreas } from '../areas/definitions';
+import { adventureWorld } from '../index';
 import { getBiome } from '../biomes/definitions';
 import { generateBiomeTilesRegion } from '../biomes/generate';
 import type { BiomeEnemyEntry, BiomePropEntry, BiomeTile } from '../biomes/types';
@@ -21,7 +27,7 @@ export function generateAdventureChunk(worldSeed: number, coordinate: ChunkCoord
   const chunkSeed = hashNumbers(worldSeed, coordinate.x, coordinate.y);
   const biomeTiles = generateBiomeTilesRegion(origin.x, origin.y, ADVENTURE_CHUNK_SIZE, ADVENTURE_CHUNK_SIZE, spawn, worldSeed);
   const areas = generateAreas(coordinate, chunkSeed, spawn);
-  const locations = generateLocations(coordinate, chunkSeed, spawn);
+  const locations = generateLocations(worldSeed, coordinate, spawn);
   const wilderness = generateWildernessObjects(coordinate, chunkSeed, biomeTiles, spawn);
   const areaObjects = areas.flatMap((area, areaIndex) => createRuin(
     area,
@@ -46,15 +52,17 @@ export function generateAdventureChunk(worldSeed: number, coordinate: ChunkCoord
   };
 }
 
-function generateLocations(coordinate: ChunkCoordinate, chunkSeed: number, spawn: { x: number; y: number }) {
+function generateLocations(worldSeed: number, coordinate: ChunkCoordinate, spawn: { x: number; y: number }) {
+  const chunkSeed = hashNumbers(worldSeed, coordinate.x, coordinate.y);
   const origin = getChunkOrigin(coordinate);
   const locations: WorldLocation[] = authoredAdventureLocations.filter((location) => (
     location.x >= origin.x
     && location.x < origin.x + ADVENTURE_CHUNK_SIZE
     && location.y >= origin.y
     && location.y < origin.y + ADVENTURE_CHUNK_SIZE
+    && (location.kind === 'town' || isAuthoredDungeonAllowed(location.id))
   ));
-  if (random(chunkSeed, 401) < 0.12) {
+  if (shouldGenerateProceduralDungeon(worldSeed, coordinate, spawn)) {
     const location: WorldLocation = {
       id: makeGeneratedId('location', coordinate, 1),
       kind: 'cave',
@@ -67,6 +75,39 @@ function generateLocations(coordinate: ChunkCoordinate, chunkSeed: number, spawn
     if (Math.hypot(location.x - spawn.x, location.y - spawn.y) > 760) locations.push(location);
   }
   return locations;
+}
+
+function shouldGenerateProceduralDungeon(worldSeed: number, coordinate: ChunkCoordinate, spawn: { x: number; y: number }) {
+  const allowedAuthoredDungeonCount = getAllowedAuthoredDungeonIds().length;
+  const maxProcedural = Math.max(0, getMaxAdventureDungeons() - allowedAuthoredDungeonCount);
+  if (maxProcedural <= 0) return false;
+  const candidates: Array<{ coordinate: ChunkCoordinate; score: number }> = [];
+  const bounds = adventureWorld.chunkBounds;
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const candidateSeed = hashNumbers(worldSeed, x, y);
+      const origin = getChunkOrigin({ x, y });
+      const dungeonX = origin.x + 180 + random(candidateSeed, 402) * (ADVENTURE_CHUNK_SIZE - 360);
+      const dungeonY = origin.y + 180 + random(candidateSeed, 403) * (ADVENTURE_CHUNK_SIZE - 360);
+      if (Math.hypot(dungeonX - spawn.x, dungeonY - spawn.y) <= 760) continue;
+      if (random(candidateSeed, 401) >= 0.12) continue;
+      candidates.push({ coordinate: { x, y }, score: hashNumbers(worldSeed, x, y, 8128) });
+    }
+  }
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates.slice(0, maxProcedural).some((candidate) => candidate.coordinate.x === coordinate.x && candidate.coordinate.y === coordinate.y);
+}
+
+function isAuthoredDungeonAllowed(locationId: string) {
+  return getAllowedAuthoredDungeonIds().includes(locationId);
+}
+
+function getAllowedAuthoredDungeonIds() {
+  return authoredAdventureLocations
+    .filter((location) => location.kind !== 'town')
+    .map((location) => location.id)
+    .sort()
+    .slice(0, getMaxAdventureDungeons());
 }
 
 function createTrainingDummy(spawn: { x: number; y: number }, now: number): AdventureEnemy {
@@ -145,7 +186,8 @@ function generateEnemies(coordinate: ChunkCoordinate, chunkSeed: number, biomeTi
     const biome = getBiomeAtTiles(biomeTiles, x, y);
     const entry = pickWeighted(biome.enemies, random(chunkSeed, index * 17 + 201));
     const definition = getAdventureEnemyDefinition(entry.id);
-    enemies.push({
+    const rank = getAdventureRankAtWorldPosition({ x, y });
+    enemies.push(scaleEnemyStatsForRank({
       id: makeGeneratedId('enemy', coordinate, index + 1),
       defId: definition.id,
       name: definition.name,
@@ -182,7 +224,7 @@ function generateEnemies(coordinate: ChunkCoordinate, chunkSeed: number, biomeTi
       alerted: false,
       statusEffects: [],
       loot: definition.loot,
-    });
+    }, rank));
   }
   return enemies;
 }

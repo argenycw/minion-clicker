@@ -5,8 +5,10 @@ import { CharacterMenu } from './CharacterMenu';
 import { InventoryMenuContent } from './CharacterMenuContent';
 import { MultiplayerMenu } from './MultiplayerMenu';
 import { SettingsMenu } from './SettingsMenu';
+import { ShopMenu } from './ShopMenu';
 import { SkillsMenu } from './SkillsMenu';
 import type { AdventureMenusController, InventoryItemKind } from './useAdventureMenus';
+import type { ShopId, ShopStockId } from '../../shops/types';
 
 export type AdventureMenuActions = {
   unlockSkill: (skillId: string) => void;
@@ -17,6 +19,8 @@ export type AdventureMenuActions = {
   removeTrait: (weaponInstanceId: string, index: number) => void;
   usePotion: (itemNo: number) => void;
   equipItem: (itemNo: number, slot: number) => void;
+  buyShopItem: (shopId: ShopId, stockId: ShopStockId, quantity: number) => void;
+  sellShopItem: (shopId: ShopId, kind: InventoryItemKind, itemNo: number, quantity: number) => void;
   customizeCharacter: (changes: { body?: string; color?: string; pillWidth?: number }) => void;
   equipOutfit: (outfitId: string) => void;
   disposeItem: (kind: InventoryItemKind, itemNo: number) => void;
@@ -67,6 +71,15 @@ export function AdventureMenus({ state, menus, actions, graphics, onGraphicsChan
       </CharacterSkillsMenu>
     )}
     {menus.active === 'settings' && <SettingsMenu graphics={graphics} onGraphicsChange={onGraphicsChange} onClose={menus.close} />}
+    {menus.active === 'shop' && menus.activeShopId && (
+      <ShopMenu
+        state={state}
+        shopId={menus.activeShopId}
+        onBuy={actions.buyShopItem}
+        onSell={actions.sellShopItem}
+        onClose={menus.close}
+      />
+    )}
     {menus.active === 'multiplayer' && (
       <MultiplayerMenu
         status={multiplayerStatus}

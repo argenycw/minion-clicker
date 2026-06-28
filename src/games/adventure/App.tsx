@@ -5,6 +5,7 @@ import {
   createInitialAdventureState,
   getEquippedWeapon,
   getAdventureInteractionPrompt,
+  getNearbyTownNpc,
   MULTIPLAYER_RESPAWN_DELAY_MS,
   type AdventureState,
   type HandSlot,
@@ -211,6 +212,14 @@ export function App() {
     if (prompt === '[E] Open') {
       const commandNow = performance.now();
       sendOrApplyCommand({ type: 'interact', playerId: stateRef.current.localPlayerId, tick: stateRef.current.simulationTick + 1 }, commandNow);
+      return;
+    }
+    if (prompt === '[E] Interact') {
+      const npc = getNearbyTownNpc(stateRef.current);
+      if (npc?.kind === 'merchant' && npc.shopId) {
+        playUiSound('menu-open');
+        menus.openShop(npc.shopId);
+      }
       return;
     }
     const direction = stateRef.current.scene === 'overworld' ? 'enter' : 'exit';

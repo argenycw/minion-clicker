@@ -1,5 +1,6 @@
 import type { AdventureEnemy } from '../enemies/types';
 import type { LootTable } from '../loot';
+import type { AdventureRank } from '../progression/types';
 import type { WorldObject } from '../world/types';
 
 export type DungeonId = 'dungeon-01';
@@ -55,6 +56,7 @@ export type DungeonInstance = {
   id: string;
   definitionId: DungeonId;
   entranceId: string;
+  rank: AdventureRank;
   rooms: DungeonRoom[];
   corridors: DungeonRect[];
   walkable: DungeonRect[];

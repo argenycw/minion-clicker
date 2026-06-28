@@ -7,7 +7,7 @@ import type { AdventureEnemy } from './enemies/types';
 import type { AdventureClanId } from './enemies/types';
 import { getOutfit } from './outfits';
 import { getActiveHasteBonus, getPassiveSkillModifiers, getSkill } from './skills';
-import { adventureWorld, type BiomeTile, type WorldArea, type WorldObject } from './world';
+import { adventureWorld, getAdventureWorldBounds, type BiomeTile, type WorldArea, type WorldObject } from './world';
 import { generateAdventureChunk } from './world/chunks/generate';
 import { getChunkCoordinate, getChunkKey, getLoadedChunkCoordinates } from './world/chunks/coordinates';
 import type { AdventureChunk } from './world/chunks/types';
@@ -15,6 +15,15 @@ import { getAdventureItem, rollLootTable, type LootTable } from './loot';
 import { generateDungeon } from './dungeons/generate';
 import { getDungeonDefinition } from './dungeons/definitions';
 import type { DungeonInstance, DungeonRect } from './dungeons/types';
+import {
+  getAdventureRankAtWorldPosition,
+  scaleDungeonChestRollRangeForRank,
+  scaleLootTableForRank,
+} from './progression/system';
+import { buyShopItem, sellInventoryItem } from './shops/system';
+import type { ShopId, ShopStockId } from './shops/types';
+import { createTownInstance, getNearbyTownNpc, isNearTownExit } from './towns/system';
+import type { TownInstance } from './towns/types';
 import type { WorldLocation } from './world/locations/types';
 import { INITIAL_PLAYER_ID, INITIAL_PLAYER_SKILL_POINTS, INITIAL_POTION_LOADOUT, INITIAL_TRAIT_LOADOUT, INITIAL_UNLOCKED_SKILLS, INITIAL_WEAPON_LOADOUT } from './playerDefaults';
 import type { AdventureCharacter } from './character/types';
@@ -28,6 +37,7 @@ export type { AdventureCharacter } from './character/types';
 export type { AdventureInventory, EffectiveWeapon, PotionStack, TraitStack, WeaponInstance } from './inventory/types';
 export type { AdventureSkills } from './skills/types';
 export { getEffectiveWeapon, getEquippedWeapon } from './inventory/system';
+export { getNearbyTownNpc } from './towns/system';
 
 export type Facing = 'left' | 'right';
 export type HandSlot = 'left' | 'right';
@@ -163,7 +173,7 @@ export type CreateAdventureStateOptions = {
 };
 
 export type AdventureState = {
-  scene: 'overworld' | 'dungeon';
+  scene: 'overworld' | 'dungeon' | 'town';
   mapSeed: number;
   localPlayerId: AdventurePlayerId;
   hostPlayerId: AdventurePlayerId;
@@ -176,6 +186,7 @@ export type AdventureState = {
   worldAreas: WorldArea[];
   worldLocations: WorldLocation[];
   dungeon?: DungeonInstance;
+  town?: TownInstance;
   overworldReturn?: OverworldReturnState;
   player: Actor;
   character: AdventureCharacter;
@@ -217,6 +228,8 @@ type ChunkChanges = {
   enemyHp: Record<string, number>;
   drops: WorldDrop[];
 };
+
+type AdventureWorldBounds = ReturnType<typeof getAdventureWorldBounds>;
 
 export type AdventurePlayerDeath = {
   diedAt: number;
@@ -344,6 +357,7 @@ export const createInitialAdventureState = (options: CreateAdventureStateOptions
 
 function createLoadedChunks(mapSeed: number, position: { x: number; y: number }, now: number) {
   return getLoadedChunkCoordinates(getChunkCoordinate(position.x, position.y))
+    .filter(isChunkInsideAdventureWorld)
     .map((coordinate) => getGeneratedAdventureChunk(mapSeed, coordinate, now));
 }
 
@@ -508,6 +522,7 @@ export function moveAdventureLocalPlayer(
       deltaSeconds,
       speed,
       state.dungeon?.walkable,
+      state.scene === 'overworld' ? getAdventureWorldBounds() : undefined,
     ),
   };
 }
@@ -545,8 +560,8 @@ function movementToKeySet(input: { moveX: number; moveY: number }) {
 }
 
 function streamAdventureChunks(state: AdventureState, now: number): AdventureState {
-  if (state.scene === 'dungeon') return state;
-  const coordinates = getLoadedChunkCoordinates(getChunkCoordinate(state.player.x, state.player.y));
+  if (state.scene !== 'overworld') return state;
+  const coordinates = getLoadedChunkCoordinates(getChunkCoordinate(state.player.x, state.player.y)).filter(isChunkInsideAdventureWorld);
   const desiredKeys = coordinates.map(getChunkKey);
   if (desiredKeys.length === state.loadedChunkKeys.length && desiredKeys.every((key) => state.loadedChunkKeys.includes(key))) return state;
 
@@ -600,6 +615,14 @@ function getGeneratedAdventureChunk(mapSeed: number, coordinate: { x: number; y:
     generatedChunkCache.delete(oldestKey);
   }
   return generated;
+}
+
+function isChunkInsideAdventureWorld(coordinate: { x: number; y: number }) {
+  const bounds = adventureWorld.chunkBounds;
+  return coordinate.x >= bounds.minX
+    && coordinate.x <= bounds.maxX
+    && coordinate.y >= bounds.minY
+    && coordinate.y <= bounds.maxY;
 }
 
 function captureChunkChanges(state: AdventureState) {
@@ -656,6 +679,7 @@ export function tickAdventureState(
   const skillModifiers = getPassiveSkillModifiers(state.skills.unlockedIds);
   const hasteBonus = now < state.skills.hasteUntil ? getActiveHasteBonus(state) : 0;
   const playerStatusModifiers = getStatusModifiers(state.player.statusEffects);
+  const worldBounds = state.scene === 'overworld' ? getAdventureWorldBounds() : undefined;
   const shieldedPlayer = expireShield(state.player, now);
   let player = shieldedPlayer.knockbackMotion
     ? applyKnockbackMotion(shieldedPlayer, now)
@@ -669,6 +693,7 @@ export function tickAdventureState(
         * skillModifiers.moveSpeedMultiplier
         * playerStatusModifiers.movementSpeedMultiplier,
       state.dungeon?.walkable,
+      worldBounds,
     );
   let enemies = state.enemies.map((enemy) => ({ ...enemy }));
   let worldObjects = state.worldObjects;
@@ -740,7 +765,7 @@ export function tickAdventureState(
         y: movedEnemy.y + attackDirection.y * Math.min(enemy.attackRange, Math.max(34, distance)),
       };
       if (areClansHostile({ id: movedEnemy.id, clanId: movedEnemy.clanId }, { id: state.player.id, clanId: PLAYER_CLAN_ID })) {
-        player = knockbackActor(damageActor(player, enemy.attack, now), movedEnemy, enemy.knockback, worldObjects, now, state.dungeon?.walkable);
+        player = knockbackActor(damageActor(player, enemy.attack, now), movedEnemy, enemy.knockback, worldObjects, now, state.dungeon?.walkable, worldBounds);
         combatTarget = { kind: 'enemy', id: enemy.id };
         effects.push(makeDamageEffect(nextEntityId, player.x, player.y, enemy.attack, getQueuedDamageBorn(effects, player.x, player.y, now)));
         nextEntityId += 1;
@@ -772,7 +797,7 @@ export function tickAdventureState(
 
   for (const impact of enemyMeleeImpacts) {
     enemies = enemies.map((enemy) => enemy.id === impact.target.id
-      ? knockbackEnemy(damageEnemyActor(enemy, impact.source.attack), impact.source, impact.source.knockback, worldObjects, now, state.dungeon?.walkable)
+      ? knockbackEnemy(damageEnemyActor(enemy, impact.source.attack), impact.source, impact.source.knockback, worldObjects, now, state.dungeon?.walkable, worldBounds)
       : enemy);
     effects.push(makeDamageEffect(nextEntityId, impact.target.x, impact.target.y, impact.source.attack, getQueuedDamageBorn(effects, impact.target.x, impact.target.y, now)));
     nextEntityId += 1;
@@ -871,7 +896,7 @@ export function tickAdventureState(
         effects.push(makeProjectileHitEffect(nextEntityId, hitPoint.x, hitPoint.y, next, now, 'impact-flesh'));
         nextEntityId += 1;
         enemies = enemies.map((enemy) => enemy.id === enemyHit.id
-          ? knockbackEnemy(damageEnemyActor(enemy, next.damage), next, next.knockback, worldObjects, now, state.dungeon?.walkable)
+          ? knockbackEnemy(damageEnemyActor(enemy, next.damage), next, next.knockback, worldObjects, now, state.dungeon?.walkable, worldBounds)
           : enemy);
         effects.push(makeDamageEffect(nextEntityId, enemyHit.x, enemyHit.y, next.damage, getQueuedDamageBorn(effects, enemyHit.x, enemyHit.y, now)));
         nextEntityId += 1;
@@ -890,13 +915,13 @@ export function tickAdventureState(
         const hitPoint = getProjectileActorHitPoint(projectile, next, player) ?? next;
         effects.push(makeProjectileHitEffect(nextEntityId, hitPoint.x, hitPoint.y, next, now, 'impact-flesh'));
         nextEntityId += 1;
-        player = knockbackActor(damageActor(player, next.damage, now), next, next.knockback, worldObjects, now, state.dungeon?.walkable);
+        player = knockbackActor(damageActor(player, next.damage, now), next, next.knockback, worldObjects, now, state.dungeon?.walkable, worldBounds);
         combatTarget = next.sourceId ? { kind: 'enemy', id: next.sourceId } : combatTarget;
         effects.push(makeDamageEffect(nextEntityId, player.x, player.y, next.damage, getQueuedDamageBorn(effects, player.x, player.y, now)));
         nextEntityId += 1;
         continue;
       }
-      if (next.remainingDistance > 0 && isInsideWorld(next.x, next.y)) projectiles.push(next);
+      if (next.remainingDistance > 0 && isInsideWorld(next.x, next.y, worldBounds)) projectiles.push(next);
       continue;
     }
     const hit = enemies.find((enemy) => enemy.hp > 0
@@ -906,7 +931,7 @@ export function tickAdventureState(
     if (hit) {
       combatTarget = { kind: 'enemy', id: hit.id };
       enemies = enemies.map((enemy) => enemy.id === hit.id
-        ? knockbackEnemy(damageEnemyActor(enemy, next.damage), next, next.knockback, worldObjects, now, state.dungeon?.walkable)
+        ? knockbackEnemy(damageEnemyActor(enemy, next.damage), next, next.knockback, worldObjects, now, state.dungeon?.walkable, worldBounds)
         : enemy);
       enemies = alertEnemy(enemies, hit.id, player, now);
       enemies = inflictWeaponStatuses(enemies, hit.id, next.inflictions, now, nextEntityId);
@@ -947,7 +972,7 @@ export function tickAdventureState(
         worldDrops = [...worldDrops, ...spawned];
         nextEntityId += spawned.length;
       }
-    } else if (next.remainingDistance > 0 && isInsideWorld(next.x, next.y)) {
+    } else if (next.remainingDistance > 0 && isInsideWorld(next.x, next.y, worldBounds)) {
       projectiles.push(next);
     }
   }
@@ -972,8 +997,9 @@ export function tickAdventureState(
     nextEntityId,
     combatTarget,
     dungeon: state.dungeon ? { ...state.dungeon, enemies, objects: worldObjects } : undefined,
+    town: state.town ? { ...state.town, objects: worldObjects } : undefined,
   }, now);
-  return state.scene === 'dungeon' ? nextState : streamAdventureChunks(nextState, now);
+  return state.scene === 'overworld' ? streamAdventureChunks(nextState, now) : nextState;
 }
 
 export function interactWithAdventure(state: AdventureState, now: number): AdventureState {
@@ -981,7 +1007,6 @@ export function interactWithAdventure(state: AdventureState, now: number): Adven
   if (state.scene === 'overworld') {
     const location = getNearbyLocation(state);
     if (!location) return state;
-    const dungeon = generateDungeon(location.dungeonId, location.id, state.mapSeed, now);
     const overworldReturn: OverworldReturnState = {
       loadedChunks: state.loadedChunks,
       loadedChunkKeys: state.loadedChunkKeys,
@@ -995,10 +1020,35 @@ export function interactWithAdventure(state: AdventureState, now: number): Adven
       combatTarget: state.combatTarget,
       player: state.player,
     };
+    if (location.kind === 'town') {
+      const town = createTownInstance(location.townId);
+      return {
+        ...state,
+        scene: 'town',
+        town,
+        dungeon: undefined,
+        overworldReturn,
+        biomeTiles: [],
+        worldAreas: [],
+        worldLocations: [],
+        worldDrops: [],
+        enemies: [],
+        worldObjects: town.objects,
+        projectiles: [],
+        effects: [],
+        propParticles: [],
+        player: { ...state.player, ...town.spawn },
+        combatTarget: undefined,
+        lastTick: now,
+      };
+    }
+    const rank = getAdventureRankAtWorldPosition(location);
+    const dungeon = generateDungeon(location.dungeonId, location.id, state.mapSeed, now, rank);
     return {
       ...state,
       scene: 'dungeon',
       dungeon,
+      town: undefined,
       overworldReturn,
       biomeTiles: [],
       worldAreas: [],
@@ -1015,12 +1065,29 @@ export function interactWithAdventure(state: AdventureState, now: number): Adven
     };
   }
 
+  if (state.scene === 'town') {
+    if (!state.town || !state.overworldReturn || !isNearTownExit(state)) return state;
+    return {
+      ...state,
+      scene: 'overworld',
+      town: undefined,
+      dungeon: undefined,
+      overworldReturn: undefined,
+      ...state.overworldReturn,
+      projectiles: [],
+      effects: [],
+      propParticles: [],
+      lastTick: now,
+    };
+  }
+
   if (!state.dungeon || !state.overworldReturn) return state;
   if (Math.hypot(state.player.x - state.dungeon.exit.x, state.player.y - state.dungeon.exit.y) <= 95) {
     return {
       ...state,
       scene: 'overworld',
       dungeon: undefined,
+      town: undefined,
       overworldReturn: undefined,
       ...state.overworldReturn,
       projectiles: [],
@@ -1033,14 +1100,16 @@ export function interactWithAdventure(state: AdventureState, now: number): Adven
   const chest = state.dungeon.chests.find((candidate) => !candidate.opened && Math.hypot(state.player.x - candidate.x, state.player.y - candidate.y) <= 92);
   if (!chest) return state;
   const definition = getDungeonDefinition(state.dungeon.definitionId);
-  const rolls = randomRange(definition.chestRolls, hashRuntimeId(chest.id));
+  const rank = state.dungeon.rank;
+  const rolls = randomRange(scaleDungeonChestRollRangeForRank(definition.chestRolls, rank), hashRuntimeId(chest.id));
+  const chestLoot = scaleLootTableForRank(definition.chestLoot, rank) ?? definition.chestLoot;
   let nextEntityId = state.nextEntityId;
   const worldDrops = [...state.worldDrops];
   for (let index = 0; index < rolls; index += 1) {
     const angle = Math.PI * 2 * index / Math.max(1, rolls) - Math.PI / 2;
     const distance = 72 + (index % 2) * 26;
     const random = makeDeterministicRandom(hashRuntimeId(chest.id) + index * 97);
-    const spawned = makeChestRollDrops(nextEntityId, chest.x + Math.cos(angle) * distance, chest.y + Math.sin(angle) * distance, definition.chestLoot, now + index * 90, random);
+    const spawned = makeChestRollDrops(nextEntityId, chest.x + Math.cos(angle) * distance, chest.y + Math.sin(angle) * distance, chestLoot, now + index * 90, random);
     worldDrops.push(...spawned);
     nextEntityId += Math.max(1, spawned.length);
   }
@@ -1057,6 +1126,10 @@ export function getAdventureInteractionPrompt(state: AdventureState) {
     const location = getNearbyLocation(state);
     return location ? '[E] Enter' : undefined;
   }
+  if (state.scene === 'town') {
+    if (isNearTownExit(state)) return '[E] Exit';
+    return getNearbyTownNpc(state) ? '[E] Interact' : undefined;
+  }
   if (!state.dungeon) return undefined;
   if (Math.hypot(state.player.x - state.dungeon.exit.x, state.player.y - state.dungeon.exit.y) <= 95) return '[E] Exit';
   const chest = state.dungeon.chests.find((candidate) => !candidate.opened && Math.hypot(state.player.x - candidate.x, state.player.y - candidate.y) <= 92);
@@ -1065,6 +1138,16 @@ export function getAdventureInteractionPrompt(state: AdventureState) {
 
 export function debugTeleportPlayer(state: AdventureState, x: number, y: number): AdventureState {
   return { ...state, player: { ...state.player, x, y } };
+}
+
+export function buyAdventureShopItem(state: AdventureState, shopId: ShopId, stockId: ShopStockId, quantity: number): AdventureState {
+  if (state.death || state.scene !== 'town') return state;
+  return buyShopItem(state, shopId, stockId, quantity);
+}
+
+export function sellAdventureShopItem(state: AdventureState, shopId: ShopId, kind: 'weapon' | 'trait' | 'potion', itemNo: number, quantity: number): AdventureState {
+  if (state.death || state.scene !== 'town') return state;
+  return sellInventoryItem(state, shopId, kind, itemNo, quantity);
 }
 
 function getNearbyLocation(state: AdventureState) {
@@ -1076,6 +1159,7 @@ export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: 
   if (now < state.cooldownReadyAt[hand]) return state;
   const weapon = getEquippedWeapon(state, hand);
   if (!weapon) return state;
+  const worldBounds = state.scene === 'overworld' ? getAdventureWorldBounds() : undefined;
   const cooldownMs = 1000 / (weapon.attackSpeed * getStatusModifiers(state.player.statusEffects).attackSpeedMultiplier);
   const nextReady = { ...state.cooldownReadyAt, [hand]: now + cooldownMs };
   const weaponFlash = [...state.weaponFlash.filter((flash) => flash.hand !== hand), { hand, born: now }];
@@ -1085,7 +1169,7 @@ export function activateWeapon(state: AdventureState, hand: HandSlot, aim: { x: 
     const outfit = getOutfit(state.character.outfitId);
     const skillDamageMultiplier = getPassiveSkillModifiers(state.skills.unlockedIds).damageMultiplier;
     const attackWeapon = { ...weapon, damage: Math.ceil((weapon.damage + (outfit.damageBonus ?? 0)) * skillDamageMultiplier) };
-    const meleeResult = applyMeleeWeapon(state.enemies, hitCenter, attackWeapon, { id: state.player.id, clanId: PLAYER_CLAN_ID, x: state.player.x, y: state.player.y }, state.worldObjects, now, state.dungeon?.walkable);
+    const meleeResult = applyMeleeWeapon(state.enemies, hitCenter, attackWeapon, { id: state.player.id, clanId: PLAYER_CLAN_ID, x: state.player.x, y: state.player.y }, state.worldObjects, now, state.dungeon?.walkable, worldBounds);
     let enemies = meleeResult.enemies;
     const hits = meleeResult.hits;
     const objectHits = state.worldObjects.filter((object) => object.hp !== undefined && object.hp > 0 && circleIntersectsObject(hitCenter.x, hitCenter.y, weapon.radius, object));
@@ -1246,7 +1330,14 @@ export function activateSkill(state: AdventureState, skillId: string, aim: { x: 
     };
   }
   if (effect.kind === 'blink') {
-    const player = blinkPlayer(state.player, aim, state.worldObjects, effect.distance, state.dungeon?.walkable);
+    const player = blinkPlayer(
+      state.player,
+      aim,
+      state.worldObjects,
+      effect.distance,
+      state.dungeon?.walkable,
+      state.scene === 'overworld' ? getAdventureWorldBounds() : undefined,
+    );
     return {
       ...state,
       player,
@@ -1341,7 +1432,14 @@ export function flashItemSlot(state: AdventureState, slot: number, now: number):
   };
 }
 
-function blinkPlayer(player: Actor, aim: { x: number; y: number }, worldObjects: WorldObject[], distance: number, walkable?: DungeonRect[]): Actor {
+function blinkPlayer(
+  player: Actor,
+  aim: { x: number; y: number },
+  worldObjects: WorldObject[],
+  distance: number,
+  walkable?: DungeonRect[],
+  worldBounds?: AdventureWorldBounds,
+): Actor {
   const direction = normalizedVector(player, aim);
   const requestedDistance = Math.min(distance, Math.hypot(aim.x - player.x, aim.y - player.y));
   const blockers = worldObjects.filter((object) => object.blocking && object.hp !== 0);
@@ -1351,13 +1449,26 @@ function blinkPlayer(player: Actor, aim: { x: number; y: number }, worldObjects:
     const traveled = requestedDistance * step / steps;
     const x = player.x + direction.x * traveled;
     const y = player.y + direction.y * traveled;
-    if (blockers.some((object) => circleIntersectsObject(x, y, player.radius, object)) || !isInsideWalkableArea(x, y, player.radius, walkable)) break;
+    if (
+      blockers.some((object) => circleIntersectsObject(x, y, player.radius, object))
+      || !isInsideWalkableArea(x, y, player.radius, walkable)
+      || !isInsideWorld(x, y, worldBounds, player.radius)
+    ) break;
     result = { ...player, x, y, facing: direction.x < 0 ? 'left' : 'right' };
   }
   return result;
 }
 
-function movePlayer(player: Actor, worldObjects: WorldObject[], keys: Set<string>, aim: { x: number; y: number }, deltaSeconds: number, speed: number, walkable?: DungeonRect[]): Actor {
+function movePlayer(
+  player: Actor,
+  worldObjects: WorldObject[],
+  keys: Set<string>,
+  aim: { x: number; y: number },
+  deltaSeconds: number,
+  speed: number,
+  walkable?: DungeonRect[],
+  worldBounds?: AdventureWorldBounds,
+): Actor {
   let dx = 0;
   let dy = 0;
   if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
@@ -1368,8 +1479,16 @@ function movePlayer(player: Actor, worldObjects: WorldObject[], keys: Set<string
   const targetX = player.x + (dx / length) * speed * deltaSeconds;
   const targetY = player.y + (dy / length) * speed * deltaSeconds;
   const activeBlockers = worldObjects.filter((object) => object.blocking && object.hp !== 0);
-  const x = activeBlockers.some((object) => circleIntersectsObject(targetX, player.y, player.radius, object)) || !isInsideWalkableArea(targetX, player.y, player.radius, walkable) ? player.x : targetX;
-  const y = activeBlockers.some((object) => circleIntersectsObject(x, targetY, player.radius, object)) || !isInsideWalkableArea(x, targetY, player.radius, walkable) ? player.y : targetY;
+  const x = activeBlockers.some((object) => circleIntersectsObject(targetX, player.y, player.radius, object))
+    || !isInsideWalkableArea(targetX, player.y, player.radius, walkable)
+    || !isInsideWorld(targetX, player.y, worldBounds, player.radius)
+    ? player.x
+    : targetX;
+  const y = activeBlockers.some((object) => circleIntersectsObject(x, targetY, player.radius, object))
+    || !isInsideWalkableArea(x, targetY, player.radius, walkable)
+    || !isInsideWorld(x, targetY, worldBounds, player.radius)
+    ? player.y
+    : targetY;
   return { ...player, x, y, facing: aim.x < player.x ? 'left' : 'right' };
 }
 
@@ -1380,9 +1499,10 @@ function knockbackActor<T extends Actor>(
   worldObjects: WorldObject[],
   now: number,
   walkable?: DungeonRect[],
+  worldBounds?: AdventureWorldBounds,
 ): T {
   const stiffness = Math.max(0, Math.min(100, actor.stiffness ?? 0));
-  return scheduleKnockbackMotion(actor, normalizedVector(origin, actor), amount * (1 - stiffness / 100), worldObjects, now, walkable);
+  return scheduleKnockbackMotion(actor, normalizedVector(origin, actor), amount * (1 - stiffness / 100), worldObjects, now, walkable, worldBounds);
 }
 
 function knockbackEnemy(
@@ -1392,8 +1512,9 @@ function knockbackEnemy(
   worldObjects: WorldObject[],
   now: number,
   walkable?: DungeonRect[],
+  worldBounds?: AdventureWorldBounds,
 ) {
-  return scheduleKnockbackMotion(enemy, normalizedVector(origin, enemy), amount, worldObjects, now, walkable);
+  return scheduleKnockbackMotion(enemy, normalizedVector(origin, enemy), amount, worldObjects, now, walkable, worldBounds);
 }
 
 function scheduleKnockbackMotion<T extends { x: number; y: number; radius: number; knockbackMotion?: KnockbackMotion }>(
@@ -1403,6 +1524,7 @@ function scheduleKnockbackMotion<T extends { x: number; y: number; radius: numbe
   worldObjects: WorldObject[],
   now: number,
   walkable?: DungeonRect[],
+  worldBounds?: AdventureWorldBounds,
 ): T {
   if (distance <= 0) return actor;
   const current = applyKnockbackMotion(actor, now);
@@ -1413,8 +1535,16 @@ function scheduleKnockbackMotion<T extends { x: number; y: number; radius: numbe
     const traveled = distance * step / steps;
     const targetX = current.x + direction.x * traveled;
     const targetY = current.y + direction.y * traveled;
-    const x = activeBlockers.some((object) => circleIntersectsObject(targetX, result.y, current.radius, object)) || !isInsideWalkableArea(targetX, result.y, current.radius, walkable) ? result.x : targetX;
-    const y = activeBlockers.some((object) => circleIntersectsObject(x, targetY, current.radius, object)) || !isInsideWalkableArea(x, targetY, current.radius, walkable) ? result.y : targetY;
+    const x = activeBlockers.some((object) => circleIntersectsObject(targetX, result.y, current.radius, object))
+      || !isInsideWalkableArea(targetX, result.y, current.radius, walkable)
+      || !isInsideWorld(targetX, result.y, worldBounds, current.radius)
+      ? result.x
+      : targetX;
+    const y = activeBlockers.some((object) => circleIntersectsObject(x, targetY, current.radius, object))
+      || !isInsideWalkableArea(x, targetY, current.radius, walkable)
+      || !isInsideWorld(x, targetY, worldBounds, current.radius)
+      ? result.y
+      : targetY;
     result = { ...result, x, y };
     if (result.x !== targetX && result.y !== targetY) break;
   }
@@ -1556,6 +1686,7 @@ function applyMeleeWeapon(
   worldObjects: WorldObject[],
   now: number,
   walkable?: DungeonRect[],
+  worldBounds?: AdventureWorldBounds,
 ) {
   const hits: AdventureEnemy[] = [];
   const nextEnemies = enemies.map((enemy) => {
@@ -1563,7 +1694,7 @@ function applyMeleeWeapon(
     if (!areClansHostile(source, { id: enemy.id, clanId: enemy.clanId })) return enemy;
     if (Math.hypot(enemy.x - hitCenter.x, enemy.y - hitCenter.y) > weapon.radius + enemy.radius) return enemy;
     hits.push(enemy);
-    return knockbackEnemy(damageEnemyActor(enemy, weapon.damage), source, weapon.knockback, worldObjects, now, walkable);
+    return knockbackEnemy(damageEnemyActor(enemy, weapon.damage), source, weapon.knockback, worldObjects, now, walkable, worldBounds);
   });
   return { enemies: nextEnemies, hits };
 }
@@ -2054,8 +2185,13 @@ function makeEnemyProjectile(startId: number, enemy: AdventureEnemy, target: Act
   };
 }
 
-function isInsideWorld(x: number, y: number) {
-  return Number.isFinite(x) && Number.isFinite(y);
+function isInsideWorld(x: number, y: number, bounds?: AdventureWorldBounds, radius = 0) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  if (!bounds) return true;
+  return x - radius >= bounds.left
+    && x + radius <= bounds.right
+    && y - radius >= bounds.top
+    && y + radius <= bounds.bottom;
 }
 
 function clamp(value: number, min: number, max: number) {

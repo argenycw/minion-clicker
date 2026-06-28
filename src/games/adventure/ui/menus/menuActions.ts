@@ -15,6 +15,8 @@ export function createAdventureMenuActions(
     removeTrait: (weaponInstanceId, index) => sendCommand({ type: 'removeTrait', ...getCommandContext(), weaponInstanceId, index }),
     usePotion: (itemNo) => sendCommand({ type: 'usePotion', ...getCommandContext(), itemNo }),
     equipItem: (itemNo, slot) => sendCommand({ type: 'equipItem', ...getCommandContext(), itemNo, slot }),
+    buyShopItem: (shopId, stockId, quantity) => sendCommand({ type: 'buyShopItem', ...getCommandContext(), shopId, stockId, quantity }),
+    sellShopItem: (shopId, kind, itemNo, quantity) => sendCommand({ type: 'sellShopItem', ...getCommandContext(), shopId, kind, itemNo, quantity }),
     customizeCharacter: (changes) => sendCommand({ type: 'customizeCharacter', ...getCommandContext(), changes }),
     equipOutfit: (outfitId) => sendCommand({ type: 'equipOutfit', ...getCommandContext(), outfitId }),
     disposeItem: (kind, itemNo) => sendCommand({ type: 'dispose', ...getCommandContext(), kind, itemNo }),

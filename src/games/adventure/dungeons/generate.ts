@@ -1,5 +1,11 @@
 import { getAdventureEnemyDefinition } from '../enemies/definitions';
 import type { AdventureEnemy } from '../enemies/types';
+import {
+  getAdventureRankMultiplier,
+  scaleDungeonEnemyCountRangeForRank,
+  scaleEnemyStatsForRank,
+} from '../progression/system';
+import type { AdventureRank } from '../progression/types';
 import { createProp } from '../world/props';
 import type { WorldObject } from '../world/types';
 import { getDungeonDefinition } from './definitions';
@@ -9,7 +15,7 @@ const GRID_X = 1220;
 const GRID_Y = 920;
 const CORRIDOR_WIDTH = 240;
 
-export function generateDungeon(definitionId: DungeonId, entranceId: string, mapSeed: number, now: number): DungeonInstance {
+export function generateDungeon(definitionId: DungeonId, entranceId: string, mapSeed: number, now: number, rank: AdventureRank): DungeonInstance {
   const definition = getDungeonDefinition(definitionId);
   const seed = hashText(`${mapSeed}:${entranceId}:${definitionId}`);
   const roomCount = randomInt(seed, 1, definition.roomCount);
@@ -31,7 +37,8 @@ export function generateDungeon(definitionId: DungeonId, entranceId: string, map
     };
   });
   const corridors = makeDungeonCorridors(seed, cells, rooms);
-  const chests = rooms.slice(1).flatMap((room, index) => index === 0 || random(seed, index * 29 + 91) < definition.chestChance
+  const rankMultiplier = getAdventureRankMultiplier(rank);
+  const chests = rooms.slice(1).flatMap((room, index) => index === 0 || random(seed, index * 29 + 91) < Math.min(0.85, definition.chestChance + rankMultiplier.chestRollBonus * 0.08)
     ? [{
       id: makeDungeonEntityId('chest', entranceId, index + 1),
       x: room.centerX + room.width * (random(seed, index * 29 + 92) - 0.5) * 0.48,
@@ -39,7 +46,8 @@ export function generateDungeon(definitionId: DungeonId, entranceId: string, map
       opened: false,
     }]
     : []);
-  const enemies = rooms.slice(1).flatMap((room, roomIndex) => makeRoomEnemies(seed, entranceId, room, roomIndex, definition.enemyIds, definition.enemiesPerRoom, now));
+  const enemiesPerRoom = scaleDungeonEnemyCountRange(definition.enemiesPerRoom, rank);
+  const enemies = rooms.slice(1).flatMap((room, roomIndex) => makeRoomEnemies(seed, entranceId, room, roomIndex, definition.enemyIds, enemiesPerRoom, now, rank));
   const first = rooms[0];
   const spawn = { x: first.centerX, y: first.centerY + 80 };
   const exit = { id: makeDungeonEntityId('exit', entranceId, 1), x: first.centerX, y: first.centerY - 90 };
@@ -57,6 +65,7 @@ export function generateDungeon(definitionId: DungeonId, entranceId: string, map
     id: makeDungeonEntityId('dungeon-instance', entranceId, 1),
     definitionId,
     entranceId,
+    rank,
     rooms,
     corridors,
     walkable: [...rooms, ...corridors],
@@ -191,13 +200,13 @@ function makeDungeonObject(entranceId: string, prop: DungeonProp, index: number)
   };
 }
 
-function makeRoomEnemies(seed: number, entranceId: string, room: DungeonRoom, roomIndex: number, enemyIds: string[], countRange: [number, number], now: number) {
+function makeRoomEnemies(seed: number, entranceId: string, room: DungeonRoom, roomIndex: number, enemyIds: string[], countRange: [number, number], now: number, rank: AdventureRank) {
   const count = randomInt(seed, roomIndex * 41 + 201, countRange);
   return Array.from({ length: count }, (_, index): AdventureEnemy => {
     const definition = getAdventureEnemyDefinition(enemyIds[Math.floor(random(seed, roomIndex * 67 + index * 7 + 301) * enemyIds.length)]);
     const x = room.centerX + room.width * (random(seed, roomIndex * 67 + index * 7 + 302) - 0.5) * 0.5;
     const y = room.centerY + room.height * (random(seed, roomIndex * 67 + index * 7 + 303) - 0.5) * 0.45;
-    return {
+    return scaleEnemyStatsForRank({
       id: makeDungeonEntityId('enemy', entranceId, roomIndex * 10 + index + 1),
       defId: definition.id,
       name: definition.name,
@@ -234,8 +243,12 @@ function makeRoomEnemies(seed: number, entranceId: string, room: DungeonRoom, ro
       alerted: false,
       statusEffects: [],
       loot: definition.loot,
-    };
+    }, rank);
   });
+}
+
+function scaleDungeonEnemyCountRange(range: [number, number], rank: AdventureRank): [number, number] {
+  return scaleDungeonEnemyCountRangeForRank(range, rank);
 }
 
 function makeDungeonEntityId(prefix: string, entranceId: string, index: number) {

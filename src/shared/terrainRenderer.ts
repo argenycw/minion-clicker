@@ -1,3 +1,5 @@
+import { drawSpriteRef, type SpriteRef } from './sprites';
+
 export type TerrainVisualKind = 'tree' | 'bush' | 'rock' | 'flower' | 'flowerbed' | 'mushroom' | 'stump' | 'dead-tree' | 'ruin-wall' | 'ruin-pillar' | 'barrel' | 'crate' | 'rubble';
 
 export type TerrainVisual = {
@@ -11,6 +13,7 @@ export type TerrainVisual = {
   blocking: boolean;
   destructible?: boolean;
   hitAt?: number;
+  sprite?: SpriteRef;
 };
 
 const pseudoCache = new Map<string, number>();
@@ -50,6 +53,11 @@ export function drawTerrainVisual(ctx: CanvasRenderingContext2D, visual: Terrain
   const canRotate = visual.kind === 'rock' || visual.kind === 'ruin-wall' || visual.kind === 'barrel' || visual.kind === 'crate' || visual.kind === 'rubble';
   ctx.rotate((canRotate ? visual.rotation : 0) + Math.sin((now - (visual.hitAt ?? now)) * 0.055) * 0.025 * shake);
   drawShadow(ctx, visual);
+
+  if (visual.sprite && drawSpriteRef(ctx, visual.sprite, 0, -visual.height * 0.08, visual.width * 1.65, visual.height * 1.65)) {
+    ctx.restore();
+    return;
+  }
 
   if (visual.kind === 'tree') drawTree(ctx, visual);
   else if (visual.kind === 'bush') drawBush(ctx, visual);

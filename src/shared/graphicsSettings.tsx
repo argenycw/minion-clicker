@@ -4,6 +4,7 @@ export type GraphicsSettings = {
   fps: 30 | 60;
   resolutionScale: 0.75 | 1 | 1.5;
   ambientEffects: boolean;
+  mapSprites: boolean;
   showFps: boolean;
 };
 
@@ -14,6 +15,7 @@ export const defaultGraphicsSettings: GraphicsSettings = {
   fps: 60,
   resolutionScale: 1,
   ambientEffects: true,
+  mapSprites: true,
   showFps: true,
 };
 
@@ -24,6 +26,7 @@ function loadGraphicsSettings(): GraphicsSettings {
       fps: saved.fps === 30 ? 30 : 60,
       resolutionScale: saved.resolutionScale === 0.75 || saved.resolutionScale === 1.5 ? saved.resolutionScale : 1,
       ambientEffects: saved.ambientEffects ?? true,
+      mapSprites: saved.mapSprites ?? true,
       showFps: saved.showFps ?? true,
     };
   } catch {
@@ -71,6 +74,7 @@ export function GraphicsSettingsPanel({ settings, onChange }: { settings: Graphi
         </div>
       </SettingRow>
       <ToggleSetting title="Ambient effects" description="Falling leaves, dust, and similar map effects." checked={settings.ambientEffects} onChange={(ambientEffects) => onChange({ ambientEffects })} />
+      <ToggleSetting title="Map sprites" description="Draw opted-in terrain props from cached sprite sheets." checked={settings.mapSprites} onChange={(mapSprites) => onChange({ mapSprites })} />
       <ToggleSetting title="FPS counter" description="Show measured rendering FPS above the controls." checked={settings.showFps} onChange={(showFps) => onChange({ showFps })} />
     </div>
   );

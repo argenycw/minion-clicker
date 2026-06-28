@@ -5,6 +5,10 @@ export const GAME_SETTINGS = {
   performance: {
     cullMargin: 140,
   },
+  adventure: {
+    maxTerrainChunksPerSide: { x: 10, y: 12 },
+    maxDungeons: 24,
+  },
   world: {
     width: 6000,
     height: 4000,

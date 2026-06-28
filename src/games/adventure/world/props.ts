@@ -1,9 +1,9 @@
 import type { PropDefinition, WorldObject, WorldObjectKind } from './types';
 
 export const propDefinitions: Record<WorldObjectKind, PropDefinition> = {
-  tree: { kind: 'tree', width: 58, height: 52, blocking: true, maxHp: 86, collision: { kind: 'circle', radiusRatio: 0.34 }, loot: { coin: { probability: 0.45, amount: [1, 2] } }, audio: { onHit: 'prop-tree-hit', onDestroy: 'prop-tree-destroy' } },
-  bush: { kind: 'bush', width: 46, height: 38, blocking: true, maxHp: 28, hitPieces: [2, 4], destroyPieces: [8, 10], collision: { kind: 'ellipse', radiusXRatio: 0.45, radiusYRatio: 0.42 }, loot: { coin: { probability: 0.45, amount: [1, 2] } }, audio: { onHit: 'prop-bush-hit', onDestroy: 'prop-bush-destroy' } },
-  rock: { kind: 'rock', width: 36, height: 28, blocking: true, maxHp: 130, hitPieces: [2, 3], destroyPieces: [6, 8], collision: { kind: 'ellipse', radiusXRatio: 0.46, radiusYRatio: 0.42 }, loot: { coin: { probability: 0.45, amount: [1, 2] } }, audio: { onHit: 'prop-rock-hit', onDestroy: 'prop-rock-destroy' } },
+  tree: { kind: 'tree', width: 58, height: 52, blocking: true, maxHp: 86, collision: { kind: 'circle', radiusRatio: 0.34 }, loot: { coin: { probability: 0.45, amount: [1, 2] } }, audio: { onHit: 'prop-tree-hit', onDestroy: 'prop-tree-destroy' }, sprite: { sheetId: 'adventure-props-01', x: 0, y: 0 } },
+  bush: { kind: 'bush', width: 46, height: 38, blocking: true, maxHp: 28, hitPieces: [2, 4], destroyPieces: [8, 10], collision: { kind: 'ellipse', radiusXRatio: 0.45, radiusYRatio: 0.42 }, loot: { coin: { probability: 0.45, amount: [1, 2] } }, audio: { onHit: 'prop-bush-hit', onDestroy: 'prop-bush-destroy' }, sprite: { sheetId: 'adventure-props-01', x: 2, y: 0 } },
+  rock: { kind: 'rock', width: 36, height: 28, blocking: true, maxHp: 130, hitPieces: [2, 3], destroyPieces: [6, 8], collision: { kind: 'ellipse', radiusXRatio: 0.46, radiusYRatio: 0.42 }, loot: { coin: { probability: 0.45, amount: [1, 2] } }, audio: { onHit: 'prop-rock-hit', onDestroy: 'prop-rock-destroy' }, sprite: { sheetId: 'adventure-props-01', x: 3, y: 0 } },
   flower: { kind: 'flower', width: 18, height: 18, blocking: false },
   flowerbed: { kind: 'flowerbed', width: 42, height: 28, blocking: false },
   mushroom: { kind: 'mushroom', width: 18, height: 18, blocking: false },
@@ -41,5 +41,6 @@ export function createProp(
     areaId: options.areaId,
     loot: definition.loot,
     audio: definition.audio,
+    sprite: definition.sprite,
   };
 }

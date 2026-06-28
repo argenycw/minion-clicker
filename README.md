@@ -27,7 +27,7 @@ Adventure mode is an early sandbox roguelike RPG prototype where the player dire
 
 ## Routes
 
-- `/` redirects to `/clicker` for backward compatibility.
+- `/` shows the Minion Games homepage with links into each game.
 - `/clicker` runs Minion Clicker.
 - `/adventure` runs the Adventure prototype.
 
