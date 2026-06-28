@@ -1,29 +1,9 @@
-import weaponsJson from './weapons.json';
 import traitsJson from './traits.json';
 import type { ItemRank } from './loot';
-
-export type WeaponKind = 'melee' | 'projectile';
-
-export type WeaponDefinition = {
-  id: string;
-  name: string;
-  rank: ItemRank;
-  handGlyph: string;
-  activeGlyph?: string;
-  kind: WeaponKind;
-  description: string;
-  damage: number;
-  range: number;
-  radius: number;
-  attackSpeed: number;
-  color: string;
-  effectGlyph: string;
-  effectSize?: number;
-  projectile?: {
-    glyph: string;
-    speed: number;
-  };
-};
+import type { StatusEffectId } from './status-effects/types';
+import { getStatusEffectDefinition } from './status-effects/definitions';
+export { getWeapon, weaponDefinitions } from './weapons/definitions';
+export type { WeaponDefinition, WeaponKind } from './weapons/types';
 
 export type TraitDefinition = {
   id: string;
@@ -33,64 +13,22 @@ export type TraitDefinition = {
   color: string;
   family: 'attack' | 'defense' | 'utility' | 'magic' | 'impact';
   description: string;
+  damageConstant?: number;
   damageMultiplier?: number;
   attackSpeedMultiplier?: number;
   rangeMultiplier?: number;
   radiusMultiplier?: number;
   extraProjectiles?: number;
+  lifeDrain?: number;
+  shield?: number;
+  inflict?: {
+    id: StatusEffectId;
+    chance?: number;
+    time?: number;
+  };
 };
 
-function validateWeapon(input: unknown): WeaponDefinition {
-  const weapon = input as Partial<WeaponDefinition>;
-  if (!weapon || typeof weapon !== 'object') throw new Error('Weapon must be an object.');
-  if (!weapon.id || !/^[a-z0-9-]+$/i.test(weapon.id)) throw new Error('Weapon id must be a slug.');
-  if (!weapon.name) throw new Error(`Weapon ${weapon.id} requires a name.`);
-  if (!isItemRank(weapon.rank)) throw new Error(`Weapon ${weapon.id} requires a valid rank.`);
-  if (!weapon.handGlyph) throw new Error(`Weapon ${weapon.id} requires a handGlyph.`);
-  if (weapon.kind !== 'melee' && weapon.kind !== 'projectile') throw new Error(`Weapon ${weapon.id} has an invalid kind.`);
-  for (const key of ['damage', 'range', 'radius', 'attackSpeed'] as const) {
-    if (typeof weapon[key] !== 'number' || weapon[key]! <= 0) throw new Error(`Weapon ${weapon.id} requires positive ${key}.`);
-  }
-  if (!weapon.color) throw new Error(`Weapon ${weapon.id} requires a color.`);
-  if (!weapon.effectGlyph) throw new Error(`Weapon ${weapon.id} requires an effectGlyph.`);
-  if (weapon.kind === 'projectile' && (!weapon.projectile?.glyph || typeof weapon.projectile.speed !== 'number')) {
-    throw new Error(`Projectile weapon ${weapon.id} requires projectile glyph and speed.`);
-  }
-  if ((weapon.handGlyph.includes('{p}') || weapon.activeGlyph?.includes('{p}')) && !weapon.projectile?.glyph) {
-    throw new Error(`Weapon ${weapon.id} uses {p} but has no projectile glyph.`);
-  }
-  const damage = weapon.damage!;
-  const range = weapon.range!;
-  const radius = weapon.radius!;
-  const attackSpeed = weapon.attackSpeed!;
-
-  return {
-    id: weapon.id,
-    name: weapon.name,
-    rank: weapon.rank,
-    handGlyph: weapon.handGlyph,
-    activeGlyph: weapon.activeGlyph,
-    kind: weapon.kind,
-    description: weapon.description ?? '',
-    damage,
-    range,
-    radius,
-    attackSpeed,
-    color: weapon.color,
-    effectGlyph: weapon.effectGlyph,
-    effectSize: weapon.effectSize,
-    projectile: weapon.projectile,
-  };
-}
-
-export const weaponDefinitions: WeaponDefinition[] = (weaponsJson as WeaponDefinition[]).map(validateWeapon);
 export const traitDefinitions: TraitDefinition[] = (traitsJson as TraitDefinition[]).map(validateTrait);
-
-export function getWeapon(id: string) {
-  const weapon = weaponDefinitions.find((item) => item.id === id);
-  if (!weapon) throw new Error(`Unknown weapon: ${id}`);
-  return weapon;
-}
 
 export function getTrait(id: string) {
   const trait = traitDefinitions.find((item) => item.id === id);
@@ -106,6 +44,15 @@ function validateTrait(input: unknown): TraitDefinition {
   if (!isItemRank(trait.rank)) throw new Error(`Trait ${trait.id} requires a valid rank.`);
   if (!trait.icon) throw new Error(`Trait ${trait.id} requires an icon.`);
   if (!trait.color) throw new Error(`Trait ${trait.id} requires a color.`);
+  if (trait.inflict) {
+    getStatusEffectDefinition(trait.inflict.id);
+    if (trait.inflict.chance !== undefined && (!Number.isFinite(trait.inflict.chance) || trait.inflict.chance < 0 || trait.inflict.chance > 1)) {
+      throw new Error(`Trait ${trait.id} inflict chance must be between 0 and 1.`);
+    }
+    if (trait.inflict.time !== undefined && (!Number.isFinite(trait.inflict.time) || trait.inflict.time <= 0)) {
+      throw new Error(`Trait ${trait.id} inflict time must be positive.`);
+    }
+  }
   return {
     id: trait.id,
     name: trait.name,
@@ -114,11 +61,15 @@ function validateTrait(input: unknown): TraitDefinition {
     color: trait.color,
     family: trait.family ?? 'utility',
     description: trait.description ?? '',
+    damageConstant: trait.damageConstant,
     damageMultiplier: trait.damageMultiplier,
     attackSpeedMultiplier: trait.attackSpeedMultiplier,
     rangeMultiplier: trait.rangeMultiplier,
     radiusMultiplier: trait.radiusMultiplier,
     extraProjectiles: trait.extraProjectiles,
+    lifeDrain: trait.lifeDrain,
+    shield: trait.shield,
+    inflict: trait.inflict ? { ...trait.inflict } : undefined,
   };
 }
 

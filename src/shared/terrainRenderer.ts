@@ -42,7 +42,7 @@ export function drawTerrainGround(ctx: CanvasRenderingContext2D, width: number, 
 }
 
 export function drawTerrainVisual(ctx: CanvasRenderingContext2D, visual: TerrainVisual, now = 0) {
-  const shake = visual.hitAt === undefined ? 0 : Math.max(0, 1 - (now - visual.hitAt) / 220);
+  const shake = visual.hitAt === undefined ? 0 : Math.max(0, Math.min(1, 1 - (now - visual.hitAt) / 220));
   const shakeX = shake > 0 ? Math.sin((now - visual.hitAt!) * 0.075) * 4 * shake : 0;
   const shakeY = shake > 0 ? Math.cos((now - visual.hitAt!) * 0.09) * 1.5 * shake : 0;
   ctx.save();

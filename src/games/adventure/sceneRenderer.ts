@@ -5,6 +5,7 @@ import type { WorldArea, WorldObject } from './world';
 import { drawBiomeGround } from './world/biomes/render';
 import { ADVENTURE_CHUNK_SIZE, getChunkOrigin } from './world/chunks/coordinates';
 import type { AdventureEnemy } from './enemies/types';
+import type { AdventureClanId } from './enemies/types';
 import type { AdventureCamera } from './camera';
 import { getOutfit } from './outfits';
 import type { GraphicsSettings } from '../../shared/graphicsSettings';
@@ -12,12 +13,34 @@ import { getAdventureItem, ITEM_RANK_COLORS, ITEM_RANK_EFFECT_COLORS } from './l
 import { getDungeonDefinition } from './dungeons/definitions';
 import type { DungeonChest, DungeonProp, DungeonRect } from './dungeons/types';
 import type { WorldLocation } from './world/locations/types';
+import type { AdventureRenderMotion } from './multiplayer/motion';
+import { getStatusEffectDefinition } from './status-effects/definitions';
+import type { StatusEffectInstance } from './status-effects/types';
 
 const unitBodyHeight = 40;
 const unitBodyFont = 18;
 const unitHandFont = 17;
 const unitHandGap = 8;
 type ViewBounds = { left: number; top: number; right: number; bottom: number };
+type OverheadEmoteOptions = {
+  text: string;
+  x: number;
+  y: number;
+  born: number;
+  now: number;
+  durationMs: number;
+  color: string;
+  background: string;
+  border?: string;
+};
+type ThoughtBubbleOptions = {
+  text: string;
+  x: number;
+  y: number;
+  textColor?: string;
+  background?: string;
+  border?: string;
+};
 const sortedObjectsCache = new WeakMap<WorldObject[], WorldObject[]>();
 
 export function drawScene(
@@ -29,6 +52,7 @@ export function drawScene(
   hoverHand: HandSlot | undefined,
   interactionPrompt: string | undefined,
   now: number,
+  renderMotion?: AdventureRenderMotion,
 ) {
   const rect = canvas.getBoundingClientRect();
   const ratio = Math.min(window.devicePixelRatio || 1, graphics.resolutionScale);
@@ -60,43 +84,31 @@ export function drawScene(
   drawMap(ctx, state, bounds, now, graphics.ambientEffects);
   for (const drop of state.worldDrops) if (isPointVisible(drop, bounds, 120)) drawWorldDrop(ctx, drop, now);
   if (hoverHand) drawWeaponRange(ctx, state, hoverHand);
-  if (isPointVisible(aim, bounds, 40)) drawAimCursor(ctx, aim);
-  for (const enemy of state.enemies) if (isPointVisible(enemy, bounds, 90)) drawEnemy(ctx, enemy, now);
+  for (const enemy of state.enemies) {
+    const renderedEnemy = { ...enemy, ...renderMotion?.enemies[enemy.id] };
+    if (isPointVisible(renderedEnemy, bounds, 90)) drawEnemy(ctx, renderedEnemy, now);
+  }
   for (const playerState of Object.values(state.players)) {
-    if (playerState.id !== state.localPlayerId && isPointVisible(playerState.actor, bounds, 90)) {
-      drawPlayer(ctx, state, playerState.actor, now, playerState, false);
+    const renderedPlayer = renderMotion?.players[playerState.id] ?? playerState.actor;
+    if (playerState.id !== state.localPlayerId && isPointVisible(renderedPlayer, bounds, 90)) {
+      drawPlayer(ctx, state, renderedPlayer, now, playerState, false);
     }
   }
-  drawPlayer(ctx, state, state.player, now, undefined, true);
-  if (interactionPrompt) drawInteractionThought(ctx, state.player, interactionPrompt);
-  for (const projectile of state.projectiles) if (isPointVisible(projectile, bounds, 50)) drawProjectile(ctx, projectile);
-  for (const effect of state.effects) if (isPointVisible(effect, bounds, 160)) drawEffect(ctx, effect, now);
+  const renderedLocalPlayer = renderMotion?.players[state.localPlayerId] ?? state.player;
+  drawPlayer(ctx, state, renderedLocalPlayer, now, undefined, true);
+  if (interactionPrompt) drawInteractionThought(ctx, renderedLocalPlayer, interactionPrompt);
+  for (const projectile of renderMotion?.projectiles ?? state.projectiles) if (isPointVisible(projectile, bounds, 50)) drawProjectile(ctx, projectile);
+  for (const effect of renderMotion?.effects ?? state.effects) if (isPointVisible(effect, bounds, 160)) drawEffect(ctx, effect, now);
   for (const particle of state.propParticles) if (isPointVisible(particle, bounds, 30)) drawPropParticle(ctx, particle, now);
   ctx.restore();
 }
 
 function drawInteractionThought(ctx: CanvasRenderingContext2D, player: AdventureState['player'], prompt: string) {
-  ctx.save();
-  ctx.font = '900 15px "Segoe UI", sans-serif';
-  const width = Math.max(82, ctx.measureText(prompt).width + 28);
-  const x = player.x + player.radius + 14;
-  const y = player.y - 68;
-  ctx.fillStyle = 'rgba(255, 249, 229, 0.96)';
-  ctx.strokeStyle = 'rgba(65, 51, 36, 0.76)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, 34, 17);
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(player.x + player.radius + 6, player.y - 34, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#33291f';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(prompt, x + width / 2, y + 17);
-  ctx.restore();
+  drawThoughtBubble(ctx, {
+    text: prompt,
+    x: player.x + player.radius + 14,
+    y: player.y - 68,
+  });
 }
 
 function drawWorldDrop(ctx: CanvasRenderingContext2D, drop: AdventureState['worldDrops'][number], now: number) {
@@ -181,6 +193,10 @@ function getCoinKind(amount: number): CoinKind {
 function drawMap(ctx: CanvasRenderingContext2D, state: AdventureState, bounds: ViewBounds, now: number, ambientEffects: boolean) {
   if (state.scene === 'dungeon' && state.dungeon) {
     drawDungeonMap(ctx, state.dungeon, bounds, now);
+    for (const object of getSortedObjects(state.worldObjects)) {
+      if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
+      drawWorldObject(ctx, object, now);
+    }
     return;
   }
   for (const chunk of state.loadedChunks) {
@@ -461,6 +477,7 @@ function drawPlayer(
   playerState?: AdventurePlayerState,
   selected = true,
 ) {
+  if (player.hp <= 0) return;
   const character = playerState?.character ?? state.character;
   const leftWeapon = playerState ? getEquippedWeaponForPlayer(playerState, 'left') : getEquippedWeapon(state, 'left');
   const rightWeapon = playerState ? getEquippedWeaponForPlayer(playerState, 'right') : getEquippedWeapon(state, 'right');
@@ -482,7 +499,7 @@ function drawPlayer(
     rightActive,
     color: character.color,
     pillWidth: character.pillWidth,
-    stroke: selected ? '#4777bd' : '#59666b',
+    stroke: selected ? getClanColor('player') : '#59666b',
     selected,
     wobble: Math.sin(now / 220) * 1.1,
   });
@@ -498,7 +515,9 @@ function drawPlayer(
     ctx.fillText(outfit.glyph, player.x + (outfit.offsetX ?? 0), player.y + (outfit.offsetY ?? 0));
     ctx.restore();
   }
-  drawHpBar(ctx, player.x - 36, player.y + 31, 72, 8, player.hp / player.maxHp, '#4777bd');
+  const shieldRatio = player.shieldExpiresAt > now ? player.shield / player.maxHp : 0;
+  drawHpBar(ctx, player.x - 36, player.y + 31, 72, 8, player.hp / player.maxHp, '#4777bd', shieldRatio);
+  drawStatusBadges(ctx, player.statusEffects, player.x - 36, player.y + 43, 72, now);
 }
 
 function getEquippedWeaponForPlayer(player: AdventurePlayerState, hand: HandSlot): EffectiveWeapon | undefined {
@@ -519,7 +538,7 @@ function drawEnemy(ctx: CanvasRenderingContext2D, enemy: AdventureEnemy, now: nu
     rightHand: enemy.rightHand,
     color: enemy.color,
     pillWidth: enemy.pillWidth,
-    stroke: '#bb3f4d',
+    stroke: getClanColor(enemy.clanId),
     selected: false,
     wobble: Math.sin(now / 380 + enemy.x) * 0.8,
   });
@@ -527,9 +546,125 @@ function drawEnemy(ctx: CanvasRenderingContext2D, enemy: AdventureEnemy, now: nu
   ctx.fillStyle = '#493542';
   ctx.font = '800 18px "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
+  if (enemy.alerted) drawEnemyAlert(ctx, enemy, now);
   ctx.fillText(enemy.name, enemy.x, enemy.y - 48);
   drawHpBar(ctx, enemy.x - 48, enemy.y + 32, 96, 9, enemy.hp / enemy.maxHp, '#d94f5f');
+  drawStatusBadges(ctx, enemy.statusEffects, enemy.x - 48, enemy.y + 45, 96, now);
   ctx.restore();
+}
+
+function getClanColor(clanId: AdventureClanId) {
+  if (clanId === 'player') return '#4777bd';
+  if (clanId === 'neutral') return '#e03445';
+  const campPalette = ['#ff9f1c', '#d84cff', '#00b7c7', '#a6e22e', '#ff5e7a', '#7c5cff'];
+  const value = Number.parseInt(clanId.split('-').at(-1) ?? '', 10);
+  if (Number.isFinite(value)) return campPalette[Math.abs(value - 1) % campPalette.length];
+  let hash = 0;
+  for (const character of clanId) hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  return campPalette[Math.abs(hash) % campPalette.length];
+}
+
+function drawEnemyAlert(ctx: CanvasRenderingContext2D, enemy: AdventureEnemy, now: number) {
+  if (enemy.alertedAt === undefined) return;
+  drawOverheadEmote(ctx, {
+    text: '!',
+    x: enemy.x,
+    y: enemy.y - 76,
+    born: enemy.alertedAt,
+    now,
+    durationMs: 3000,
+    color: '#5b3820',
+    background: '#ffd34d',
+    border: '#5b3820',
+  });
+}
+
+function drawOverheadEmote(ctx: CanvasRenderingContext2D, options: OverheadEmoteOptions) {
+  const age = Math.max(0, options.now - options.born);
+  if (age > options.durationMs) return;
+  const intro = Math.min(1, age / 420);
+  const outro = age > options.durationMs - 360 ? Math.max(0, (options.durationMs - age) / 360) : 1;
+  const pop = 0.72 + Math.sin(intro * Math.PI) * 0.35 + intro * 0.28;
+  const alpha = Math.min(1, intro * 1.4) * outro;
+  const bob = Math.sin(options.now / 160) * 2 + (1 - outro) * 12;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(options.x, options.y - bob);
+  ctx.scale(pop, pop);
+  ctx.fillStyle = options.background;
+  ctx.strokeStyle = options.border ?? options.color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = options.color;
+  ctx.font = '1000 22px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(options.text, 0, -1);
+  ctx.restore();
+}
+
+function drawThoughtBubble(ctx: CanvasRenderingContext2D, options: ThoughtBubbleOptions) {
+  ctx.save();
+  ctx.font = '900 15px "Segoe UI", sans-serif';
+  const width = Math.max(82, ctx.measureText(options.text).width + 28);
+  ctx.fillStyle = options.background ?? 'rgba(255, 249, 229, 0.96)';
+  ctx.strokeStyle = options.border ?? 'rgba(65, 51, 36, 0.76)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(options.x, options.y, width, 34, 17);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = options.textColor ?? '#33291f';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(options.text, options.x + width / 2, options.y + 17);
+  ctx.restore();
+}
+
+function drawStatusBadges(
+  ctx: CanvasRenderingContext2D,
+  effects: StatusEffectInstance[] | undefined,
+  x: number,
+  y: number,
+  maxWidth: number,
+  now: number,
+) {
+  if (!effects?.length) return;
+  const size = 20;
+  const gap = 4;
+  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
+  effects.forEach((effect, index) => {
+    const definition = getStatusEffectDefinition(effect.definitionId);
+    const badgeX = x + (index % perRow) * (size + gap);
+    const badgeY = y + Math.floor(index / perRow) * (size + gap);
+    ctx.save();
+    ctx.fillStyle = definition.color;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, size, size, 5);
+    ctx.fill();
+    ctx.clip();
+    if (effect.expiresAt !== undefined) {
+      const total = Math.max(1, effect.expiresAt - effect.appliedAt);
+      const remaining = Math.max(0, Math.min(1, (effect.expiresAt - now) / total));
+      const elapsedAngle = (1 - remaining) * Math.PI * 2;
+      ctx.fillStyle = 'rgba(20, 24, 32, 0.48)';
+      ctx.beginPath();
+      ctx.moveTo(badgeX + size / 2, badgeY + size / 2);
+      ctx.arc(badgeX + size / 2, badgeY + size / 2, size * 0.72, -Math.PI / 2, -Math.PI / 2 + elapsedAngle);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 14px "Segoe UI Symbol", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(definition.icon, badgeX + size / 2, badgeY + size / 2);
+    ctx.restore();
+  });
 }
 
 function drawKaomoji(
@@ -649,16 +784,17 @@ function drawProjectile(ctx: CanvasRenderingContext2D, projectile: Projectile) {
 
 function drawEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: number) {
   if (now < effect.born) return;
+  if (effect.kind === 'audio') return;
   if (effect.kind === 'death') {
     drawDeathEffect(ctx, effect, now);
     return;
   }
-  const life = effect.kind === 'damage' ? 950 : 420;
+  const life = effect.kind === 'damage' || effect.kind === 'heal' ? 950 : 420;
   const t = Math.min(1, (now - effect.born) / life);
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (effect.kind === 'damage') {
+  if (effect.kind === 'damage' || effect.kind === 'heal') {
     ctx.globalAlpha = 1 - Math.max(0, t - 0.72) / 0.28;
     ctx.fillStyle = effect.color;
     ctx.font = '900 25px "Segoe UI", sans-serif';
@@ -672,7 +808,10 @@ function drawEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: nu
     ctx.globalAlpha = 1 - Math.max(0, t - 0.72) / 0.28;
     ctx.fillStyle = effect.color;
     ctx.font = `${Math.round((effect.size ?? 42) + pulse * 10)}px "Segoe UI Emoji", "Segoe UI Symbol", sans-serif`;
-    ctx.fillText(effect.glyph, effect.x, effect.y);
+    const travel = effect.toX === undefined || effect.toY === undefined ? 1 : 1 - Math.pow(1 - t, 2);
+    const x = effect.x + ((effect.toX ?? effect.x) - effect.x) * travel;
+    const y = effect.y + ((effect.toY ?? effect.y) - effect.y) * travel;
+    ctx.fillText(effect.glyph, x, y);
   }
   ctx.restore();
 }
@@ -740,22 +879,21 @@ function drawWeaponRange(ctx: CanvasRenderingContext2D, state: AdventureState, h
   ctx.restore();
 }
 
-function drawAimCursor(ctx: CanvasRenderingContext2D, aim: { x: number; y: number }) {
-  ctx.save();
-  ctx.fillStyle = '#f4b23f';
-  ctx.font = '700 24px "Segoe UI Symbol", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('⌖', aim.x, aim.y);
-  ctx.restore();
-}
-
 function getVisibleHandGlyph(weapon: EffectiveWeapon | undefined, active: boolean) {
   if (!weapon) return '╯';
   return active ? weapon.activeGlyph ?? weapon.handGlyph : weapon.handGlyph;
 }
 
-function drawHpBar(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, ratio: number, color: string) {
+function drawHpBar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  ratio: number,
+  color: string,
+  shieldRatio = 0,
+) {
   ctx.fillStyle = '#2f2630';
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, height / 2);
@@ -764,6 +902,12 @@ function drawHpBar(ctx: CanvasRenderingContext2D, x: number, y: number, width: n
   ctx.beginPath();
   ctx.roundRect(x + 1, y + 1, Math.max(0, width - 2) * Math.max(0, Math.min(1, ratio)), height - 2, height / 2);
   ctx.fill();
+  if (shieldRatio > 0) {
+    ctx.fillStyle = '#f2c84b';
+    ctx.beginPath();
+    ctx.roundRect(x + 1, y + 1, Math.max(0, width - 2) * Math.min(1, shieldRatio), height - 2, height / 2);
+    ctx.fill();
+  }
 }
 
 function drawPropParticle(ctx: CanvasRenderingContext2D, particle: PropParticle, now: number) {

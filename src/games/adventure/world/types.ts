@@ -1,4 +1,5 @@
 import type { LootTable } from '../loot';
+import type { AdventureAudioCue } from '../audio/types';
 
 export type WorldObjectKind = 'tree' | 'bush' | 'rock' | 'flower' | 'flowerbed' | 'mushroom' | 'stump' | 'dead-tree' | 'ruin-wall' | 'ruin-pillar' | 'barrel' | 'crate' | 'rubble';
 
@@ -17,6 +18,12 @@ export type PropDefinition = {
   destroyPieces?: [number, number];
   collision?: CollisionShape;
   loot?: LootTable;
+  audio?: PropAudioDefinition;
+};
+
+export type PropAudioDefinition = {
+  onHit?: AdventureAudioCue;
+  onDestroy?: AdventureAudioCue;
 };
 
 export type WorldObject = {
@@ -39,6 +46,7 @@ export type WorldObject = {
   biomeId?: string;
   areaId?: string;
   loot?: LootTable;
+  audio?: PropAudioDefinition;
 };
 
 export type WorldArea = {

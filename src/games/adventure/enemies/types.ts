@@ -1,5 +1,9 @@
-import type { Facing } from '../state';
+import type { Facing, KnockbackMotion } from '../state';
 import type { LootTable } from '../loot';
+import type { StatusEffectInstance } from '../status-effects/types';
+import type { ProjectileDefinition } from '../../../shared/content';
+
+export type AdventureClanId = 'player' | 'neutral' | `camp-${string}`;
 
 export type AdventureEnemyDefinition = {
   id: string;
@@ -14,9 +18,16 @@ export type AdventureEnemyDefinition = {
   pillWidth: number;
   maxHp: number;
   attack: number;
+  knockback: number;
   speed: number;
   attackSpeed: number;
   attackRange: number;
+  attackKind: 'melee' | 'ranged';
+  projectile?: ProjectileDefinition;
+  projectileSpeed: number;
+  projectileRadius: number;
+  alertRadius: number;
+  chaseRadius: number;
   aggroRadius: number;
   loot?: LootTable;
 };
@@ -43,11 +54,23 @@ export type AdventureEnemy = {
   color: string;
   pillWidth: number;
   attack: number;
+  knockback: number;
   speed: number;
   attackSpeed: number;
   attackRange: number;
+  attackKind: 'melee' | 'ranged';
+  projectile?: ProjectileDefinition;
+  projectileSpeed: number;
+  projectileRadius: number;
+  alertRadius: number;
+  chaseRadius: number;
   aggroRadius: number;
   attackReadyAt: number;
+  clanId: AdventureClanId;
+  knockbackMotion?: KnockbackMotion;
+  alerted: boolean;
+  alertedAt?: number;
+  statusEffects: StatusEffectInstance[];
   invulnerable?: boolean;
   loot?: LootTable;
 };

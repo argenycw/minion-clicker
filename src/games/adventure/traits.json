@@ -1,92 +1,402 @@
 [
   {
-    "id": "augmentation-01",
-    "name": "Attack Up I",
+    "id": "augmentation-001",
+    "name": "Damage I",
     "rank": "C",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
-    "description": "Imprints sharper physical force into a weapon.",
-    "damageMultiplier": 1.05
+    "description": "",
+    "damageConstant": 2
   },
   {
-    "id": "augmentation-02",
-    "name": "Attack Up II",
+    "id": "augmentation-002",
+    "name": "Damage II",
+    "rank": "C",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
+    "damageConstant": 3
+  },
+  {
+    "id": "augmentation-003",
+    "name": "Damage III",
     "rank": "B",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
-    "description": "Imprints sharper physical force into a weapon.",
-    "damageMultiplier": 1.1
+    "description": "",
+    "damageConstant": 5
   },
   {
-    "id": "augmentation-03",
-    "name": "Attack Up III",
+    "id": "augmentation-004",
+    "name": "Damage IV",
+    "rank": "B",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
+    "damageConstant": 8
+  },
+  {
+    "id": "augmentation-005",
+    "name": "Damage V",
     "rank": "A",
     "icon": "◆",
     "color": "#d94f5f",
     "family": "attack",
-    "description": "Imprints sharper physical force into a weapon.",
+    "description": "",
+    "damageConstant": 10
+  },
+  {
+    "id": "augmentation-006",
+    "name": "Strength I",
+    "rank": "C",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
+    "damageMultiplier": 1.1
+  },
+  {
+    "id": "augmentation-007",
+    "name": "Strength II",
+    "rank": "C",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
+    "damageMultiplier": 1.15
+  },
+  {
+    "id": "augmentation-008",
+    "name": "Strength III",
+    "rank": "B",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
     "damageMultiplier": 1.2
   },
   {
-    "id": "augmentation-04",
+    "id": "augmentation-009",
+    "name": "Strength IV",
+    "rank": "B",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
+    "damageMultiplier": 1.25
+  },
+  {
+    "id": "augmentation-010",
+    "name": "Strength V",
+    "rank": "A",
+    "icon": "◆",
+    "color": "#d94f5f",
+    "family": "attack",
+    "description": "",
+    "damageMultiplier": 1.3
+  },
+  {
+    "id": "augmentation-011",
     "name": "Quicken I",
     "rank": "C",
     "icon": "⚡︎",
     "color": "#efb33f",
     "family": "utility",
-    "description": "Lightens the weapon rhythm and improves attack speed.",
+    "description": "",
+    "attackSpeedMultiplier": 1.05
+  },
+  {
+    "id": "augmentation-012",
+    "name": "Quicken II",
+    "rank": "C",
+    "icon": "⚡︎",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "",
     "attackSpeedMultiplier": 1.1
   },
   {
-    "id": "augmentation-05",
-    "name": "Quicken II",
+    "id": "augmentation-013",
+    "name": "Quicken III",
     "rank": "B",
     "icon": "⚡︎",
     "color": "#efb33f",
     "family": "utility",
-    "description": "Lightens the weapon rhythm and improves attack speed.",
+    "description": "",
+    "attackSpeedMultiplier": 1.15
+  },
+  {
+    "id": "augmentation-014",
+    "name": "Quicken IV",
+    "rank": "B",
+    "icon": "⚡︎",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "",
     "attackSpeedMultiplier": 1.2
   },
   {
-    "id": "augmentation-06",
+    "id": "augmentation-015",
+    "name": "Quicken V",
+    "rank": "A",
+    "icon": "⚡︎",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "",
+    "attackSpeedMultiplier": 1.25
+  },
+  {
+    "id": "augmentation-016",
     "name": "Reach I",
     "rank": "C",
     "icon": "➚",
     "color": "#efb33f",
     "family": "utility",
-    "description": "Extends the effective range of the weapon.",
+    "description": "",
     "rangeMultiplier": 1.1
   },
   {
-    "id": "augmentation-07",
+    "id": "augmentation-017",
     "name": "Reach II",
+    "rank": "C",
+    "icon": "➚",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "",
+    "rangeMultiplier": 1.2
+  },
+  {
+    "id": "augmentation-018",
+    "name": "Reach III",
     "rank": "B",
     "icon": "➚",
     "color": "#efb33f",
     "family": "utility",
-    "description": "Extends the effective range of the weapon.",
-    "rangeMultiplier": 1.1
+    "description": "",
+    "rangeMultiplier": 1.3
   },
   {
-    "id": "augmentation-08",
-    "name": "Scatter I",
+    "id": "augmentation-019",
+    "name": "Reach IV",
     "rank": "B",
-    "icon": "⁂",
-    "color": "#7254ba",
-    "family": "magic",
-    "description": "Adds one extra projectile to ranged weapons.",
-    "extraProjectiles": 1
+    "icon": "➚",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "",
+    "rangeMultiplier": 1.4
   },
   {
-    "id": "augmentation-09",
-    "name": "Impact I",
+    "id": "augmentation-020",
+    "name": "Reach V",
+    "rank": "A",
+    "icon": "➚",
+    "color": "#efb33f",
+    "family": "utility",
+    "description": "",
+    "rangeMultiplier": 1.5
+  },
+  {
+    "id": "augmentation-026",
+    "name": "Explosion I",
+    "rank": "C",
+    "icon": "▲",
+    "color": "#ff7d55",
+    "family": "impact",
+    "description": "Expands the hit area around the strike.",
+    "radiusMultiplier": 1.1
+  },
+  {
+    "id": "augmentation-027",
+    "name": "Explosion II",
+    "rank": "C",
+    "icon": "▲",
+    "color": "#ff7d55",
+    "family": "impact",
+    "description": "Expands the hit area around the strike.",
+    "radiusMultiplier": 1.15
+  },
+  {
+    "id": "augmentation-028",
+    "name": "Explosion III",
     "rank": "B",
     "icon": "▲",
     "color": "#ff7d55",
     "family": "impact",
     "description": "Expands the hit area around the strike.",
     "radiusMultiplier": 1.2
+  },
+  {
+    "id": "augmentation-029",
+    "name": "Explosion IV",
+    "rank": "B",
+    "icon": "▲",
+    "color": "#ff7d55",
+    "family": "impact",
+    "description": "Expands the hit area around the strike.",
+    "radiusMultiplier": 1.25
+  },
+  {
+    "id": "augmentation-030",
+    "name": "Explosion V",
+    "rank": "A",
+    "icon": "▲",
+    "color": "#ff7d55",
+    "family": "impact",
+    "description": "Expands the hit area around the strike.",
+    "radiusMultiplier": 1.3
+  },
+  {
+    "id": "augmentation-031",
+    "name": "Scatter I",
+    "rank": "C",
+    "icon": "⁂",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Adds 1 extra projectile to ranged weapons with reduced damage.",
+    "extraProjectiles": 1,
+    "damageMultiplier": 0.6
+  },
+  {
+    "id": "augmentation-032",
+    "name": "Scatter II",
+    "rank": "B",
+    "icon": "⁂",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Adds 2 extra projectile to ranged weapons with reduced damage.",
+    "extraProjectiles": 2,
+    "damageMultiplier": 0.6
+  },
+  {
+    "id": "augmentation-033",
+    "name": "Scatter III",
+    "rank": "A",
+    "icon": "⁂",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Adds 3 extra projectile to ranged weapons with reduced damage.",
+    "extraProjectiles": 3,
+    "damageMultiplier": 0.6
+  },
+  {
+    "id": "augmentation-034",
+    "name": "Life Drain I",
+    "rank": "C",
+    "icon": "✚",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Convert part of the dealt damage into HP healing (Minimal 1)",
+    "lifeDrain": 0.01
+  },
+  {
+    "id": "augmentation-035",
+    "name": "Life Drain II",
+    "rank": "B",
+    "icon": "✚",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Convert part of the dealt damage into HP healing (Minimal 1)",
+    "lifeDrain": 0.025
+  },
+  {
+    "id": "augmentation-036",
+    "name": "Life Drain III",
+    "rank": "A",
+    "icon": "✚",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Convert part of the dealt damage into HP healing (Minimal 1)",
+    "lifeDrain": 0.05
+  },
+  {
+    "id": "augmentation-037",
+    "name": "Shield I",
+    "rank": "C",
+    "icon": "🛡",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Convert part of the dealt damage into a Shield, lasting for 10 seconds",
+    "shield": 0.1
+  },
+  {
+    "id": "augmentation-038",
+    "name": "Shield II",
+    "rank": "B",
+    "icon": "🛡",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Convert part of the dealt damage into a Shield, lasting for 10 seconds",
+    "shield": 0.15
+  },
+  {
+    "id": "augmentation-039",
+    "name": "Shield III",
+    "rank": "A",
+    "icon": "🛡",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "Convert part of the dealt damage into a Shield, lasting for 10 seconds",
+    "shield": 0.2
+  },
+
+  {
+    "id": "augmentation-050",
+    "name": "Effect: Poison I",
+    "rank": "C",
+    "icon": "☠",
+    "color": "#7254ba",
+    "family": "magic",
+    "description": "20% chance to inflict Poison I",
+    "inflict": {
+      "id": "debuff-01",
+      "chance": 0.2,
+      "time": 10
+    }
+  },
+  {
+    "id": "augmentation-051",
+    "name": "Effect: Burnt I",
+    "rank": "C",
+    "icon": "♨",
+    "color": "#d86135",
+    "family": "magic",
+    "description": "20% chance to inflict Burnt I for 10 seconds.",
+    "inflict": {
+      "id": "debuff-02",
+      "chance": 0.2,
+      "time": 10
+    }
+  },
+  {
+    "id": "augmentation-052",
+    "name": "Effect: Frozen I",
+    "rank": "C",
+    "icon": "❄",
+    "color": "#4a91c4",
+    "family": "magic",
+    "description": "20% chance to inflict Frozen I for 10 seconds.",
+    "inflict": {
+      "id": "debuff-03",
+      "chance": 0.2,
+      "time": 10
+    }
+  },
+  {
+    "id": "augmentation-053",
+    "name": "Effect: Slow I",
+    "rank": "C",
+    "icon": "◷",
+    "color": "#8865b3",
+    "family": "magic",
+    "description": "20% chance to inflict Slow I for 10 seconds.",
+    "inflict": {
+      "id": "debuff-04",
+      "chance": 0.2,
+      "time": 10
+    }
   }
 ]

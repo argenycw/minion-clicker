@@ -1,29 +1,36 @@
 import {
   activateWeapon,
-  applyTraitToWeapon,
   createInitialAdventureState,
-  customizeCharacter,
-  disposeInventoryItem,
   dropLootAtPlayer,
   dropCoinsAtPlayer,
-  equipPotionToSlot,
-  equipSkillToSlot,
-  equipOutfit,
-  equipWeapon,
-  removeTraitFromWeapon,
   tickAdventureState,
-  unequipWeapon,
-  usePotionByItemNo,
-  unlockSkill,
   useHotbarSlot,
   interactWithAdventure,
   debugTeleportPlayer,
+  addAdventurePlayer,
+  applyAdventureSnapshot,
+  applyAdventurePlayerPosition,
+  moveAdventureLocalPlayer,
+  removeAdventurePlayer,
+  respawnAdventurePlayer,
   syncLegacyFieldsToPlayers,
   useAdventurePlayerAsLocal,
+  type AdventurePlayerId,
   type AdventureState,
   type HandSlot,
 } from './state';
 import { commandToKeySet, type AdventureCommand } from './commands';
+import { customizeCharacter, equipOutfit } from './character/system';
+import {
+  applyTraitToWeapon,
+  disposeInventoryItem,
+  equipPotionToSlot,
+  equipWeapon,
+  removeTraitFromWeapon,
+  unequipWeapon,
+  usePotionByItemNo,
+} from './inventory/system';
+import { equipSkillToSlot, unlockSkill } from './skills/system';
 
 export type AdventureAction =
   | { type: 'tick'; now: number; keys: Set<string>; aim: { x: number; y: number } }
@@ -45,6 +52,12 @@ export type AdventureAction =
   | { type: 'interact'; now: number }
   | { type: 'debugTeleport'; x: number; y: number }
   | { type: 'command'; command: AdventureCommand; now: number }
+  | { type: 'addPlayer'; playerId: AdventurePlayerId; now: number }
+  | { type: 'removePlayer'; playerId: AdventurePlayerId }
+  | { type: 'snapshot'; state: AdventureState; localPlayerId: AdventurePlayerId }
+  | { type: 'clientMovement'; input: import('./commands').AdventureInputCommand; deltaSeconds: number; now: number }
+  | { type: 'networkPlayerPosition'; playerId: AdventurePlayerId; position: { x: number; y: number; facing: import('./state').Facing } }
+  | { type: 'respawn'; now: number }
   | { type: 'reset' };
 
 export function adventureReducer(state: AdventureState, action: AdventureAction): AdventureState {
@@ -71,6 +84,12 @@ function reduceAdventureAction(state: AdventureState, action: AdventureAction): 
   if (action.type === 'interact') return interactWithAdventure(state, action.now);
   if (action.type === 'debugTeleport') return debugTeleportPlayer(state, action.x, action.y);
   if (action.type === 'command') return applyAdventureCommand(state, action.command, action.now);
+  if (action.type === 'addPlayer') return addAdventurePlayer(state, action.playerId, action.now);
+  if (action.type === 'removePlayer') return removeAdventurePlayer(state, action.playerId);
+  if (action.type === 'snapshot') return applyAdventureSnapshot(state, action.state, action.localPlayerId);
+  if (action.type === 'clientMovement') return moveAdventureLocalPlayer(state, action.input, action.deltaSeconds, action.now);
+  if (action.type === 'networkPlayerPosition') return applyAdventurePlayerPosition(state, action.playerId, action.position);
+  if (action.type === 'respawn') return respawnAdventurePlayer(state, action.now);
   return createInitialAdventureState({ now: performance.now() });
 }
 
@@ -97,5 +116,6 @@ function applyAdventureCommand(state: AdventureState, command: AdventureCommand,
   if (command.type === 'applyTrait') return restoreLocalPlayer(applyTraitToWeapon(scoped, command.traitId, command.weaponInstanceId));
   if (command.type === 'removeTrait') return restoreLocalPlayer(removeTraitFromWeapon(scoped, command.weaponInstanceId, command.index));
   if (command.type === 'usePotion') return restoreLocalPlayer(usePotionByItemNo(scoped, command.itemNo, now));
+  if (command.type === 'respawn') return restoreLocalPlayer(respawnAdventurePlayer(scoped, now));
   return restoreLocalPlayer(disposeInventoryItem(scoped, command.kind === 'potion' ? 'potion' : command.kind, command.itemNo));
 }

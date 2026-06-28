@@ -1,5 +1,7 @@
 import { getAdventureEnemyDefinition } from '../enemies/definitions';
 import type { AdventureEnemy } from '../enemies/types';
+import { createProp } from '../world/props';
+import type { WorldObject } from '../world/types';
 import { getDungeonDefinition } from './definitions';
 import type { DungeonInstance, DungeonProp, DungeonRect, DungeonRoom, DungeonId } from './types';
 
@@ -28,7 +30,7 @@ export function generateDungeon(definitionId: DungeonId, entranceId: string, map
       centerY,
     };
   });
-  const corridors = rooms.slice(1).map((room, index) => makeCorridor(rooms[cells[index + 1].parentIndex], room));
+  const corridors = makeDungeonCorridors(seed, cells, rooms);
   const chests = rooms.slice(1).flatMap((room, index) => index === 0 || random(seed, index * 29 + 91) < definition.chestChance
     ? [{
       id: makeDungeonEntityId('chest', entranceId, index + 1),
@@ -41,12 +43,16 @@ export function generateDungeon(definitionId: DungeonId, entranceId: string, map
   const first = rooms[0];
   const spawn = { x: first.centerX, y: first.centerY + 80 };
   const exit = { id: makeDungeonEntityId('exit', entranceId, 1), x: first.centerX, y: first.centerY - 90 };
-  const props = rooms
+  const generatedRoomProps = rooms
     .flatMap((room, roomIndex) => makeRoomProps(seed, entranceId, room, roomIndex))
     .filter((prop) => Math.hypot(prop.x - spawn.x, prop.y - spawn.y) > 130)
     .filter((prop) => Math.hypot(prop.x - exit.x, prop.y - exit.y) > 130)
     .filter((prop) => chests.every((chest) => Math.hypot(prop.x - chest.x, prop.y - chest.y) > 105))
     .filter((prop) => enemies.every((enemy) => Math.hypot(prop.x - enemy.x, prop.y - enemy.y) > 90));
+  const objects = generatedRoomProps
+    .filter((prop) => prop.kind !== 'bones')
+    .map((prop, index) => makeDungeonObject(entranceId, prop, index));
+  const props = generatedRoomProps.filter((prop) => prop.kind === 'bones');
   return {
     id: makeDungeonEntityId('dungeon-instance', entranceId, 1),
     definitionId,
@@ -57,6 +63,7 @@ export function generateDungeon(definitionId: DungeonId, entranceId: string, map
     enemies,
     chests,
     props,
+    objects,
     exit,
     spawn,
   };
@@ -83,8 +90,16 @@ function generateConnectedCells(seed: number, count: number) {
   const used = new Set(['0,0']);
   for (let index = 1; index < count; index += 1) {
     let placed = false;
-    for (let attempt = 0; attempt < 30 && !placed; attempt += 1) {
-      const parentIndex = Math.floor(random(seed, index * 53 + attempt * 3 + 1) * cells.length);
+    const frontier = [...cells.keys()].sort((a, b) => {
+      const cellA = cells[a];
+      const cellB = cells[b];
+      const openA = countOpenNeighbors(cellA, used);
+      const openB = countOpenNeighbors(cellB, used);
+      if (openA !== openB) return openB - openA;
+      return random(seed, index * 97 + a) - random(seed, index * 97 + b);
+    });
+    for (let attempt = 0; attempt < 40 && !placed; attempt += 1) {
+      const parentIndex = frontier[attempt % frontier.length];
       const parent = cells[parentIndex];
       const direction = Math.floor(random(seed, index * 53 + attempt * 3 + 2) * 4);
       const next = {
@@ -102,6 +117,40 @@ function generateConnectedCells(seed: number, count: number) {
   return cells;
 }
 
+function countOpenNeighbors(cell: { x: number; y: number }, used: Set<string>) {
+  return getNeighborCells(cell).filter((neighbor) => !used.has(`${neighbor.x},${neighbor.y}`)).length;
+}
+
+function getNeighborCells(cell: { x: number; y: number }) {
+  return [
+    { x: cell.x + 1, y: cell.y },
+    { x: cell.x - 1, y: cell.y },
+    { x: cell.x, y: cell.y + 1 },
+    { x: cell.x, y: cell.y - 1 },
+  ];
+}
+
+function makeDungeonCorridors(seed: number, cells: Array<{ x: number; y: number; parentIndex: number }>, rooms: DungeonRoom[]) {
+  const corridors: DungeonRect[] = [];
+  const connected = new Set<string>();
+  const addConnection = (fromIndex: number, toIndex: number) => {
+    const key = [fromIndex, toIndex].sort((a, b) => a - b).join(':');
+    if (connected.has(key)) return;
+    connected.add(key);
+    corridors.push(makeCorridor(rooms[fromIndex], rooms[toIndex]));
+  };
+  cells.slice(1).forEach((cell, index) => addConnection(cell.parentIndex, index + 1));
+  cells.forEach((cell, index) => {
+    for (const neighbor of getNeighborCells(cell)) {
+      const neighborIndex = cells.findIndex((candidate) => candidate.x === neighbor.x && candidate.y === neighbor.y);
+      if (neighborIndex <= index) continue;
+      if (cells[neighborIndex].parentIndex === index || cell.parentIndex === neighborIndex) continue;
+      if (random(seed, index * 131 + neighborIndex * 17 + 707) < 0.46) addConnection(index, neighborIndex);
+    }
+  });
+  return corridors;
+}
+
 function makeCorridor(from: DungeonRoom, to: DungeonRoom): DungeonRect {
   if (from.centerX !== to.centerX) {
     return {
@@ -116,6 +165,29 @@ function makeCorridor(from: DungeonRoom, to: DungeonRoom): DungeonRect {
     y: Math.min(from.centerY, to.centerY),
     width: CORRIDOR_WIDTH,
     height: Math.abs(to.centerY - from.centerY),
+  };
+}
+
+function makeDungeonObject(entranceId: string, prop: DungeonProp, index: number): WorldObject {
+  const object = createProp('rock', {
+    id: makeDungeonEntityId('dungeon-object', entranceId, index + 1),
+    x: prop.x,
+    y: prop.y,
+    scale: prop.kind === 'stalagmite' ? prop.scale * 1.18 : prop.scale * 1.35,
+    rotation: prop.rotation,
+  });
+  return {
+    ...object,
+    width: prop.kind === 'stalagmite' ? 42 * prop.scale : 58 * prop.scale,
+    height: prop.kind === 'stalagmite' ? 72 * prop.scale : 44 * prop.scale,
+    maxHp: Math.round((prop.kind === 'stalagmite' ? 170 : 145) * prop.scale),
+    hp: Math.round((prop.kind === 'stalagmite' ? 170 : 145) * prop.scale),
+    hitPieces: [2, 4],
+    destroyPieces: [7, 12],
+    collision: prop.kind === 'stalagmite'
+      ? { kind: 'ellipse', radiusXRatio: 0.34, radiusYRatio: 0.45 }
+      : { kind: 'ellipse', radiusXRatio: 0.48, radiusYRatio: 0.42 },
+    loot: { coin: { probability: 0.38, amount: [1, 3] } },
   };
 }
 
@@ -146,11 +218,21 @@ function makeRoomEnemies(seed: number, entranceId: string, room: DungeonRoom, ro
       color: definition.color,
       pillWidth: definition.pillWidth,
       attack: definition.attack,
+      knockback: definition.knockback,
       speed: definition.speed,
       attackSpeed: definition.attackSpeed,
       attackRange: definition.attackRange,
+      attackKind: definition.attackKind,
+      projectile: definition.projectile,
+      projectileSpeed: definition.projectileSpeed,
+      projectileRadius: definition.projectileRadius,
+      alertRadius: Math.max(definition.alertRadius, 260),
+      chaseRadius: Math.max(definition.chaseRadius, 560),
       aggroRadius: Math.max(definition.aggroRadius, 420),
       attackReadyAt: now + random(seed, roomIndex * 67 + index * 7 + 305) * 900,
+      clanId: 'neutral',
+      alerted: false,
+      statusEffects: [],
       loot: definition.loot,
     };
   });

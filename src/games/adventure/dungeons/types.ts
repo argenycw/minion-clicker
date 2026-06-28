@@ -1,5 +1,6 @@
 import type { AdventureEnemy } from '../enemies/types';
 import type { LootTable } from '../loot';
+import type { WorldObject } from '../world/types';
 
 export type DungeonId = 'dungeon-01';
 export type DungeonLocationKind = 'cave' | 'castle' | 'tower' | 'mountain';
@@ -60,6 +61,7 @@ export type DungeonInstance = {
   enemies: AdventureEnemy[];
   chests: DungeonChest[];
   props: DungeonProp[];
+  objects: WorldObject[];
   exit: { id: string; x: number; y: number };
   spawn: { x: number; y: number };
 };

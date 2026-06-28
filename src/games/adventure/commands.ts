@@ -25,7 +25,8 @@ export type AdventureCommand =
   | { type: 'applyTrait'; playerId: AdventurePlayerId; tick: number; traitId: string; weaponInstanceId: string }
   | { type: 'removeTrait'; playerId: AdventurePlayerId; tick: number; weaponInstanceId: string; index: number }
   | { type: 'usePotion'; playerId: AdventurePlayerId; tick: number; itemNo: number }
-  | { type: 'dispose'; playerId: AdventurePlayerId; tick: number; kind: 'weapon' | 'trait' | 'potion'; itemNo: number };
+  | { type: 'dispose'; playerId: AdventurePlayerId; tick: number; kind: 'weapon' | 'trait' | 'potion'; itemNo: number }
+  | { type: 'respawn'; playerId: AdventurePlayerId; tick: number };
 
 export function keysToAdventureInputCommand(
   playerId: AdventurePlayerId,
