@@ -1,6 +1,6 @@
 # Stable ID Conventions
 
-Entity IDs are permanent technical references, not summaries of content. Use the entity type followed by a numeric slot:
+Entity IDs are permanent technical references, not summaries of fine-grained content. Use a stable system type followed by a numeric slot:
 
 ```text
 passive-01
@@ -10,13 +10,18 @@ technology-04
 outfit-02
 biome-01
 area-02
+junk-01
+food-03
+gem-02
 ```
 
-Do not use semantic IDs such as `first-aid`, `green-plains`, `strong-range-01`, or `spark-charm`. A name, effect, tier, appearance, or role may be redesigned later; its stable ID should not require relinking save data, prerequisites, equipment, biomes, or other references.
+Do not use semantic IDs such as `first-aid`, `green-plains`, `strong-range-01`, `spark-charm`, `apple-01`, or `ruby-01`. A name, effect, tier, appearance, or role may be redesigned later; its stable ID should not require relinking save data, prerequisites, equipment, biomes, or other references.
+
+For systems with stable authored type buckets, the type bucket may be the ID prefix. For example, crafting material categories such as `junk`, `food`, `wood`, `stone`, `mineral`, `gem`, `leather`, `cloth`, and `magical-product` are system-defined categories, so IDs like `food-01` or `gem-01` are acceptable. The ID still must not encode a specific item name such as `apple-01`, `orange-01`, `ruby-01`, or `sapphire-01`.
 
 Rules:
 
-1. The prefix identifies only the broad entity type.
+1. The prefix identifies only the broad entity type or a stable system-defined type bucket.
 2. The suffix is a zero-padded numeric index, normally at least two digits.
 3. Store semantic information in dedicated fields such as `name`, `kind`, `tier`, `family`, and `description`.
 4. Relationship fields such as `previousId`, `unitId`, and `outfitId` use the stable numeric ID.

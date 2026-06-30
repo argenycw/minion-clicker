@@ -27,14 +27,14 @@ import type { TownInstance } from './towns/types';
 import type { WorldLocation } from './world/locations/types';
 import { INITIAL_PLAYER_ID, INITIAL_PLAYER_SKILL_POINTS, INITIAL_POTION_LOADOUT, INITIAL_TRAIT_LOADOUT, INITIAL_UNLOCKED_SKILLS, INITIAL_WEAPON_LOADOUT } from './playerDefaults';
 import type { AdventureCharacter } from './character/types';
-import type { AdventureInventory, EffectiveWeapon, PotionStack, TraitStack, WeaponInstance } from './inventory/types';
+import type { AdventureInventory, EffectiveWeapon, MaterialStack, PotionStack, TraitStack, WeaponInstance } from './inventory/types';
 import { getEffectiveWeapon, getEquippedWeapon, usePotionByItemNo } from './inventory/system';
 import type { AdventureSkills } from './skills/types';
 import { applyStatusEffect, getStatusModifiers, tickStatusEffects } from './status-effects/system';
 import type { StatusEffectApplication, StatusEffectInstance, StatusTickEvent } from './status-effects/types';
 
 export type { AdventureCharacter } from './character/types';
-export type { AdventureInventory, EffectiveWeapon, PotionStack, TraitStack, WeaponInstance } from './inventory/types';
+export type { AdventureInventory, EffectiveWeapon, MaterialStack, PotionStack, TraitStack, WeaponInstance } from './inventory/types';
 export type { AdventureSkills } from './skills/types';
 export { getEffectiveWeapon, getEquippedWeapon } from './inventory/system';
 export { getNearbyTownNpc } from './towns/system';
@@ -811,14 +811,14 @@ export function tickAdventureState(
   }
 
   for (const object of worldObjects) {
-    if (object.kind !== 'flower' && object.kind !== 'flowerbed') continue;
+    if (object.family !== 'prop-sm' && object.family !== 'flowerbed') continue;
     const triggerRadius = player.radius + Math.max(object.width, object.height) * 0.5;
     const inside = Math.hypot(player.x - object.x, player.y - object.y) <= triggerRadius;
     if (inside !== Boolean(object.playerInside)) {
       worldObjects = worldObjects.map((candidate) => candidate.id === object.id ? { ...candidate, playerInside: inside } : candidate);
     }
     if (inside && !object.playerInside) {
-      const particles = makePropParticles(nextEntityId, object, now, 'petal', object.kind === 'flowerbed' ? 9 : 5);
+      const particles = makePropParticles(nextEntityId, object, now, 'petal', object.family === 'flowerbed' ? 9 : 5);
       propParticles = [...propParticles, ...particles];
       nextEntityId += particles.length;
     }
@@ -1592,7 +1592,7 @@ function makePropParticles(
   forcedCount?: number,
   destroyed = false,
 ): PropParticle[] {
-  const kind = forcedKind ?? getPropParticleKind(object.kind);
+  const kind = forcedKind ?? getPropParticleKind(object);
   const configuredRange = destroyed ? object.destroyPieces : object.hitPieces;
   const fallbackRange: [number, number] = destroyed
     ? kind === 'leaf' ? [9, 14] : kind === 'stone' ? [7, 11] : [8, 13]
@@ -1632,9 +1632,10 @@ function randomRange(range: [number, number], seed: number) {
   return min + Math.floor(seededParticle(seed) * (max - min + 1));
 }
 
-function getPropParticleKind(kind: WorldObject['kind']): PropParticle['kind'] {
-  if (kind === 'bush' || kind === 'tree') return 'leaf';
-  if (kind === 'rock' || kind === 'ruin-wall' || kind === 'ruin-pillar' || kind === 'rubble') return 'stone';
+function getPropParticleKind(object: WorldObject): PropParticle['kind'] {
+  const family = object.family;
+  if (family === 'bush' || family === 'tree') return 'leaf';
+  if (family === 'rock' || family === 'ruin-wall' || family === 'ruin-pillar' || family === 'rubble') return 'stone';
   return 'wood';
 }
 
@@ -2025,19 +2026,35 @@ function createInitialInventory(): AdventureInventory {
     weapons: INITIAL_WEAPON_LOADOUT.map((weapon) => ({ ...weapon, traitIds: [...weapon.traitIds] })),
     traits: INITIAL_TRAIT_LOADOUT.map((trait) => ({ ...trait })),
     potions: INITIAL_POTION_LOADOUT.map((potion) => makePotionStack(potion.itemId, potion.itemNo, potion.count)),
+    materials: [],
   };
 }
 
 function makePotionStack(itemId: string, itemNo: number, count: number): PotionStack {
   const item = getAdventureItem(itemId);
-  return { itemNo, itemId, name: item.name, icon: item.icon, rank: item.rank, count, heal: item.heal, cooldownMs: item.cooldownMs };
+  if (item.kind !== 'potion') throw new Error(`Adventure item is not a potion: ${itemId}`);
+  return { itemNo, itemId, name: item.name, icon: item.icon, iconSprite: item.iconSprite, rank: item.rank, count, heal: item.heal, cooldownMs: item.cooldownMs };
+}
+
+function makeMaterialStack(itemId: string, itemNo: number, count: number): MaterialStack {
+  const item = getAdventureItem(itemId);
+  const category = item.kind === 'material' ? item.category : 'mineral';
+  return { itemNo, itemId, name: item.name, icon: item.icon, iconSprite: item.iconSprite, rank: item.rank, count, category };
 }
 
 function makeWorldDrops(startId: number, x: number, y: number, table: LootTable | undefined, now: number, random = makeDeterministicRandom(startId)): WorldDrop[] {
   const rolled = rollLootTable(table, random);
   const drops = makeCoinDrops(startId, x - 15, y + 5, rolled.coins, now);
-  if (rolled.itemId) {
-    drops.push({ id: `drop-${String(startId + drops.length).padStart(2, '0')}`, kind: 'item', x: x + 15, y: y - 5, born: now, itemId: rolled.itemId });
+  for (const itemId of rolled.itemIds) {
+    const index = drops.length;
+    drops.push({
+      id: `drop-${String(startId + index).padStart(2, '0')}`,
+      kind: 'item',
+      x: x + 15 + (index % 3 - 1) * 18,
+      y: y - 5 + Math.floor(index / 3) * 18,
+      born: now + index * 35,
+      itemId,
+    });
   }
   return drops;
 }
@@ -2046,7 +2063,17 @@ function makeChestRollDrops(startId: number, x: number, y: number, table: LootTa
   const rolled = rollLootTable(table, random);
   const drops: WorldDrop[] = [];
   if (rolled.coins > 0) drops.push({ id: `drop-${String(startId).padStart(2, '0')}`, kind: 'coin', x: x - 14, y: y + 6, born: now, amount: rolled.coins });
-  if (rolled.itemId) drops.push({ id: `drop-${String(startId + drops.length).padStart(2, '0')}`, kind: 'item', x: x + 14, y: y - 6, born: now + 45, itemId: rolled.itemId });
+  for (const itemId of rolled.itemIds) {
+    const index = drops.length;
+    drops.push({
+      id: `drop-${String(startId + index).padStart(2, '0')}`,
+      kind: 'item',
+      x: x + 14 + (index % 3 - 1) * 18,
+      y: y - 6 + Math.floor(index / 3) * 18,
+      born: now + 45 + index * 35,
+      itemId,
+    });
+  }
   return drops;
 }
 
@@ -2100,11 +2127,20 @@ function collectWorldDrops(worldDrops: WorldDrop[], player: Actor, inventory: Ad
       continue;
     }
     if (!drop.itemId) continue;
-    const existing = nextInventory.potions.find((item) => item.itemId === drop.itemId);
-    const potions = existing
-      ? nextInventory.potions.map((item) => item.itemId === drop.itemId ? { ...item, count: item.count + 1 } : item)
-      : [...nextInventory.potions, makePotionStack(drop.itemId, Math.max(200, ...nextInventory.potions.map((item) => item.itemNo)) + 1, 1)];
-    nextInventory = { ...nextInventory, potions };
+    const item = getAdventureItem(drop.itemId);
+    if (item.kind === 'potion') {
+      const existing = nextInventory.potions.find((stack) => stack.itemId === drop.itemId);
+      const potions = existing
+        ? nextInventory.potions.map((stack) => stack.itemId === drop.itemId ? { ...stack, count: stack.count + 1 } : stack)
+        : [...nextInventory.potions, makePotionStack(drop.itemId, Math.max(200, ...nextInventory.potions.map((stack) => stack.itemNo)) + 1, 1)];
+      nextInventory = { ...nextInventory, potions };
+      continue;
+    }
+    const existing = nextInventory.materials.find((stack) => stack.itemId === drop.itemId);
+    const materials = existing
+      ? nextInventory.materials.map((stack) => stack.itemId === drop.itemId ? { ...stack, count: stack.count + 1 } : stack)
+      : [...nextInventory.materials, makeMaterialStack(drop.itemId, Math.max(300, ...nextInventory.materials.map((stack) => stack.itemNo)) + 1, 1)];
+    nextInventory = { ...nextInventory, materials };
   }
   return { worldDrops: remaining, inventory: nextInventory, coins: nextCoins };
 }

@@ -1,18 +1,22 @@
-import { drawSpriteRef, type SpriteRef } from './sprites';
+import { drawSpriteRef, getSpriteDrawSize, type SpriteRef } from './sprites';
 
-export type TerrainVisualKind = 'tree' | 'bush' | 'rock' | 'flower' | 'flowerbed' | 'mushroom' | 'stump' | 'dead-tree' | 'ruin-wall' | 'ruin-pillar' | 'barrel' | 'crate' | 'rubble';
+export type TerrainVisualKind = string;
+export type TerrainVisualFamily = 'pile' | 'flower' | 'flowerbed' | 'mushroom' | 'tree' | 'bush' | 'rock' | 'prop-xs' | 'prop-sm' | 'prop-md' | 'stump' | 'dead-tree' | 'ruin-wall' | 'ruin-pillar' | 'barrel' | 'crate' | 'rubble';
 
 export type TerrainVisual = {
   id: string;
   kind: TerrainVisualKind;
+  family?: TerrainVisualFamily;
   x: number;
   y: number;
   width: number;
   height: number;
   rotation: number;
   blocking: boolean;
+  castsShadow?: boolean;
   destructible?: boolean;
   hitAt?: number;
+  flipX?: boolean;
   sprite?: SpriteRef;
 };
 
@@ -50,27 +54,42 @@ export function drawTerrainVisual(ctx: CanvasRenderingContext2D, visual: Terrain
   const shakeY = shake > 0 ? Math.cos((now - visual.hitAt!) * 0.09) * 1.5 * shake : 0;
   ctx.save();
   ctx.translate(visual.x + shakeX, visual.y + shakeY);
-  const canRotate = visual.kind === 'rock' || visual.kind === 'ruin-wall' || visual.kind === 'barrel' || visual.kind === 'crate' || visual.kind === 'rubble';
-  ctx.rotate((canRotate ? visual.rotation : 0) + Math.sin((now - (visual.hitAt ?? now)) * 0.055) * 0.025 * shake);
+  if (visual.flipX) ctx.scale(-1, 1);
+  ctx.rotate(Math.sin((now - (visual.hitAt ?? now)) * 0.055) * 0.025 * shake);
   drawShadow(ctx, visual);
 
-  if (visual.sprite && drawSpriteRef(ctx, visual.sprite, 0, -visual.height * 0.08, visual.width * 1.65, visual.height * 1.65)) {
-    ctx.restore();
-    return;
+  if (visual.sprite) {
+    const spriteSize = getSpriteDrawSize(visual.sprite);
+    if (drawSpriteRef(
+      ctx,
+      visual.sprite,
+      visual.sprite.offsetX ?? 0,
+      visual.sprite.offsetY ?? 0,
+      spriteSize.width,
+      spriteSize.height,
+    )) {
+      ctx.restore();
+      return;
+    }
   }
 
-  if (visual.kind === 'tree') drawTree(ctx, visual);
-  else if (visual.kind === 'bush') drawBush(ctx, visual);
-  else if (visual.kind === 'rock') drawRock(ctx, visual);
-  else if (visual.kind === 'flower') drawFlower(ctx, visual);
-  else if (visual.kind === 'flowerbed') drawFlowerbed(ctx, visual);
-  else if (visual.kind === 'mushroom') drawMushroom(ctx, visual);
-  else if (visual.kind === 'stump') drawStump(ctx, visual);
-  else if (visual.kind === 'dead-tree') drawDeadTree(ctx, visual);
-  else if (visual.kind === 'ruin-wall') drawRuinWall(ctx, visual);
-  else if (visual.kind === 'ruin-pillar') drawRuinPillar(ctx, visual);
-  else if (visual.kind === 'barrel') drawBarrel(ctx, visual);
-  else if (visual.kind === 'crate') drawCrate(ctx, visual);
+  const family = visual.family ?? getTerrainVisualFamily(visual.kind);
+  if (family === 'tree') drawTree(ctx, visual);
+  else if (family === 'bush') drawBush(ctx, visual);
+  else if (family === 'rock') drawRock(ctx, visual);
+  else if (family === 'pile') drawRubble(ctx, visual);
+  else if (family === 'prop-xs') drawFlower(ctx, visual);
+  else if (family === 'prop-sm') drawFlower(ctx, visual);
+  else if (family === 'prop-md') drawFlowerbed(ctx, visual);
+  else if (family === 'flower') drawFlower(ctx, visual);
+  else if (family === 'flowerbed') drawFlowerbed(ctx, visual);
+  else if (family === 'mushroom') drawMushroom(ctx, visual);
+  else if (family === 'stump') drawStump(ctx, visual);
+  else if (family === 'dead-tree') drawDeadTree(ctx, visual);
+  else if (family === 'ruin-wall') drawRuinWall(ctx, visual);
+  else if (family === 'ruin-pillar') drawRuinPillar(ctx, visual);
+  else if (family === 'barrel') drawBarrel(ctx, visual);
+  else if (family === 'crate') drawCrate(ctx, visual);
   else drawRubble(ctx, visual);
   ctx.restore();
 }
@@ -96,7 +115,9 @@ export function drawAmbientTerrainEffects(ctx: CanvasRenderingContext2D, width: 
 }
 
 function drawShadow(ctx: CanvasRenderingContext2D, visual: TerrainVisual) {
-  if (visual.kind === 'flower' || visual.kind === 'flowerbed' || visual.kind === 'mushroom') return;
+  if (visual.castsShadow === false) return;
+  const family = visual.family ?? getTerrainVisualFamily(visual.kind);
+  if (family === 'pile' || family === 'prop-xs' || family === 'prop-sm' || family === 'prop-md' || family === 'flower' || family === 'flowerbed' || family === 'mushroom' || family === 'rubble') return;
   ctx.save();
   ctx.translate(4, Math.max(4, visual.height * 0.22));
   ctx.fillStyle = 'rgba(35, 57, 31, 0.2)';
@@ -104,6 +125,23 @@ function drawShadow(ctx: CanvasRenderingContext2D, visual: TerrainVisual) {
   ctx.ellipse(0, 0, visual.width * 0.48, visual.height * 0.3, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+function getTerrainVisualFamily(kind: string): TerrainVisualFamily {
+  if (kind.startsWith('tree-')) return 'tree';
+  if (kind.startsWith('bush-')) return 'bush';
+  if (kind.startsWith('rock-')) return 'rock';
+  if (kind.startsWith('flowerbed-')) return 'flowerbed';
+  if (kind.startsWith('flower-')) return 'flower';
+  if (kind.startsWith('mushroom-')) return 'mushroom';
+  if (kind.startsWith('dirt-')) return 'pile';
+  if (kind.startsWith('stump-')) return 'stump';
+  if (kind.startsWith('dead-tree-')) return 'dead-tree';
+  if (kind.startsWith('ruin-wall-')) return 'ruin-wall';
+  if (kind.startsWith('ruin-pillar-')) return 'ruin-pillar';
+  if (kind.startsWith('barrel-')) return 'barrel';
+  if (kind.startsWith('crate-')) return 'crate';
+  return 'rubble';
 }
 
 function drawTree(ctx: CanvasRenderingContext2D, visual: TerrainVisual) {

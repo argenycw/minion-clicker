@@ -7,6 +7,6 @@ export const adventureSpawn = {
 };
 
 export const authoredAdventureAreas: WorldArea[] = [
-  { id: 'area-01', kind: 'ruin', name: 'Mossbound Ruin', x: adventureSpawn.x - 980, y: adventureSpawn.y - 620, width: 720, height: 520 },
-  { id: 'area-02', kind: 'ruin', name: 'Broken Watch', x: adventureSpawn.x + 700, y: adventureSpawn.y + 430, width: 620, height: 460 },
+  { id: 'area-01', kind: 'ruin', name: 'Mossbound Ruin', x: adventureSpawn.x - 980, y: adventureSpawn.y - 620, width: 980, height: 700 },
+  { id: 'area-02', kind: 'ruin', name: 'Broken Watch', x: adventureSpawn.x + 700, y: adventureSpawn.y + 430, width: 920, height: 660 },
 ];

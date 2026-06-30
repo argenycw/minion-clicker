@@ -61,6 +61,8 @@ Terrain art is rendered by the shared `src/shared/terrainRenderer.ts` module so 
 
 The shared renderer also supplies ambient falling leaves and deterministic visual variants such as broadleaf, autumn, and pine trees, flowering plants, rock forms, dead wood, crates, barrels, pillars, and segmented ruins. Adventure adds interaction particles: flowers release petals when walked through, foliage releases leaves when attacked, stone props release chips, and wooden props release splinters.
 
+Adventure terrain props may opt into spritesheet rendering through a `sprite` reference on their prop definition. Spritesheet grid and hitbox conventions are documented in `docs/spritesheets.md`.
+
 Destructible prop definitions can tune reaction density with `hitPieces: [min, max]` and `destroyPieces: [min, max]`. Ordinary hits use the smaller randomized range, while the killing hit uses the larger destruction range. Flower and flowerbed traversal is edge-triggered: petals fire once on entry and can fire again only after the player leaves and re-enters.
 
 The export goal is important: Adventure characters should eventually be serializable into a form compatible with Clicker's minion schema. That means Adventure character data should preserve kaomoji appearance, hands, weapon identity, combat stats, and visual styling cleanly enough to normalize into a Clicker minion later.

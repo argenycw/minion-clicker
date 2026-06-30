@@ -32,10 +32,17 @@ export const adventureEnemyDefinitions: AdventureEnemyDefinition[] = combatMinio
   loot: {
     coin: { probability: 0.82, amount: [2, Math.max(3, Math.ceil(minion.cost / 35))] },
     loot: [
-      { itemId: 'item-01', probability: 0.4 },
-      { itemId: 'item-02', probability: 0.4 },
-      { itemId: 'item-03', probability: 0.1 },
-      { itemId: 'item-04', probability: 0.1 },
+      { itemId: 'junk-01', probability: 0.22 },
+      { itemId: 'junk-02', probability: 0.12 },
+      { itemId: 'junk-03', probability: 0.12 },
+      { itemId: 'leather-01', probability: 0.24 },
+      { itemId: 'leather-02', probability: 0.08 },
+      { itemId: 'cloth-01', probability: 0.22 },
+      { itemId: 'cloth-02', probability: 0.08 },
+      { itemId: 'magical-product-01', probability: 0.14 },
+      { itemId: 'magical-product-02', probability: 0.035 },
+      { itemId: 'item-01', probability: 0.12 },
+      { itemId: 'item-02', probability: 0.08 },
     ],
   },
 }));

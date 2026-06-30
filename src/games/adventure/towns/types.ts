@@ -6,7 +6,7 @@ export type TownNpcId = `npc-${string}`;
 export type TownNpcDefinition = {
   id: TownNpcId;
   name: string;
-  kind: 'merchant' | 'villager';
+  kind: 'merchant' | 'blacksmith' | 'villager';
   x: number;
   y: number;
   radius: number;

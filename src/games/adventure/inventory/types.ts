@@ -1,6 +1,8 @@
 import type { ItemRank } from '../loot';
 import type { TraitDefinition, WeaponDefinition } from '../content';
 import type { StatusEffectApplication } from '../status-effects/types';
+import type { SpriteRef } from '../../../shared/sprites';
+import type { CraftingMaterialCategory } from '../crafting/types';
 
 export type WeaponInstance = {
   itemNo: number;
@@ -21,16 +23,29 @@ export type PotionStack = {
   itemId: string;
   name: string;
   icon: string;
+  iconSprite?: SpriteRef;
   rank: ItemRank;
   count: number;
   heal: number;
   cooldownMs: number;
 };
 
+export type MaterialStack = {
+  itemNo: number;
+  itemId: string;
+  name: string;
+  icon: string;
+  iconSprite?: SpriteRef;
+  rank: ItemRank;
+  count: number;
+  category: CraftingMaterialCategory;
+};
+
 export type AdventureInventory = {
   weapons: WeaponInstance[];
   traits: TraitStack[];
   potions: PotionStack[];
+  materials: MaterialStack[];
 };
 
 export type EffectiveWeapon = WeaponDefinition & {

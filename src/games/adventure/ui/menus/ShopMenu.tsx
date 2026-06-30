@@ -18,9 +18,10 @@ import type { InventoryItemKind } from './useAdventureMenus';
 import { StoneIcon } from './StoneIcon';
 
 type ShopMode = 'buy' | 'sell';
+type SellableInventoryItemKind = Exclude<InventoryItemKind, 'material'>;
 type SellEntry = {
   key: string;
-  kind: InventoryItemKind;
+  kind: SellableInventoryItemKind;
   itemNo: number;
   name: string;
   icon: ReactNode;
@@ -39,7 +40,7 @@ export function ShopMenu({
   state: AdventureState;
   shopId: ShopId;
   onBuy: (shopId: ShopId, stockId: ShopStockId, quantity: number) => void;
-  onSell: (shopId: ShopId, kind: InventoryItemKind, itemNo: number, quantity: number) => void;
+  onSell: (shopId: ShopId, kind: SellableInventoryItemKind, itemNo: number, quantity: number) => void;
   onClose: () => void;
 }) {
   const shop = getShopDefinition(shopId);
@@ -139,16 +140,18 @@ export function ShopMenu({
           <h3>{mode === 'buy' ? 'Purchase' : 'Buyback'}</h3>
           <div className="shop-price-row"><span>Coins</span><strong>{state.coins}</strong></div>
           <div className="shop-price-row"><span>Unit Price</span><strong>{unitPrice}</strong></div>
-          <label className="shop-quantity-control">
+          <div className="shop-quantity-control">
             <span>Qty</span>
-            <input
-              type="number"
-              min={1}
-              max={maxQuantity}
-              value={safeQuantity}
-              onChange={(event) => setQuantity(clampQuantity(Number(event.target.value), maxQuantity))}
-            />
-          </label>
+            <div className="shop-quantity-stepper" aria-label="Quantity">
+              <button type="button" disabled={safeQuantity <= 1} onClick={() => setQuantity(clampQuantity(safeQuantity - 1, maxQuantity))} aria-label="Decrease quantity">
+                ◀
+              </button>
+              <strong>{safeQuantity}</strong>
+              <button type="button" disabled={safeQuantity >= maxQuantity} onClick={() => setQuantity(clampQuantity(safeQuantity + 1, maxQuantity))} aria-label="Increase quantity">
+                ▶
+              </button>
+            </div>
+          </div>
           <div className="shop-price-row total"><span>Total</span><strong>{total}</strong></div>
           <button
             type="button"
@@ -190,6 +193,7 @@ function BuyDetails({ stock }: { stock: ShopStockDefinition }) {
     );
   }
   const item = getAdventureItem(stock.itemId);
+  if (item.kind !== 'potion') return null;
   return (
     <>
       <div className="inspector-header">

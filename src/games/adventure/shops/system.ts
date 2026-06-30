@@ -99,6 +99,7 @@ export function sellInventoryItem(state: AdventureState, shopId: ShopId, kind: '
 
 function addPotionStack(potions: PotionStack[], itemId: string, count: number): PotionStack[] {
   const item = getAdventureItem(itemId);
+  if (item.kind !== 'potion') return potions;
   const existing = potions.find((stack) => stack.itemId === itemId);
   if (existing) return potions.map((stack) => stack.itemId === itemId ? { ...stack, count: stack.count + count } : stack);
   return [...potions, {
@@ -106,6 +107,7 @@ function addPotionStack(potions: PotionStack[], itemId: string, count: number): 
     itemId,
     name: item.name,
     icon: item.icon,
+    iconSprite: item.iconSprite,
     rank: item.rank,
     count,
     heal: item.heal,

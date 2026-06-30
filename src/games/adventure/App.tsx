@@ -42,6 +42,14 @@ const CLIENT_POSITION_SEND_INTERVAL_MS = 50;
 const HOST_MOTION_SEND_INTERVAL_MS = 50;
 const HOST_SNAPSHOT_SEND_INTERVAL_MS = 500;
 
+function getHotbarReadyAt(state: AdventureState, slot: number) {
+  const entry = state.hotbarSlots[slot - 1];
+  if (!entry) return 0;
+  if (entry.kind === 'skill') return state.skills.cooldownReadyAt[entry.skillId] ?? 0;
+  const item = state.inventory.potions.find((potion) => potion.itemNo === entry.itemNo);
+  return item ? state.potionReadyAt[item.itemId] ?? 0 : 0;
+}
+
 declare global {
   interface Window {
     adventureDebug?: {
@@ -60,6 +68,7 @@ declare global {
         weapons: Array<{ itemNo: number; name: string }>;
         stones: Array<{ itemNo: number; traitId: string; count: number }>;
         items: Array<{ itemNo: number; name: string; count: number }>;
+        materials: Array<{ itemNo: number; name: string; count: number }>;
       };
     };
   }
@@ -75,6 +84,7 @@ export function App() {
   const [measuredFps, setMeasuredFps] = useState(0);
   const [sceneTransition, setSceneTransition] = useState<SceneTransition | undefined>();
   const [transitionLoading, setTransitionLoading] = useState(false);
+  const [rejectedHotbarSlots, setRejectedHotbarSlots] = useState<Record<number, number>>({});
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
   const previousAudioStateRef = useRef<AdventureState | undefined>(undefined);
@@ -219,6 +229,11 @@ export function App() {
       if (npc?.kind === 'merchant' && npc.shopId) {
         playUiSound('menu-open');
         menus.openShop(npc.shopId);
+        return;
+      }
+      if (npc?.kind === 'blacksmith') {
+        playUiSound('menu-open');
+        menus.open('crafting');
       }
       return;
     }
@@ -259,12 +274,18 @@ export function App() {
       }
       if (/^[1-5]$/.test(key)) {
         event.preventDefault();
+        if (event.repeat) return;
         const commandNow = performance.now();
+        const slot = Number(key);
+        if (getHotbarReadyAt(stateRef.current, slot) > commandNow) {
+          setRejectedHotbarSlots((slots) => ({ ...slots, [slot]: commandNow }));
+          return;
+        }
         sendOrApplyCommand({
           type: 'hotbar',
           playerId: stateRef.current.localPlayerId,
           tick: stateRef.current.simulationTick + 1,
-          slot: Number(key),
+          slot,
           aimX: aimRef.current.x,
           aimY: aimRef.current.y,
         }, commandNow);
@@ -345,6 +366,7 @@ export function App() {
         weapons: stateRef.current.inventory.weapons.map((item) => ({ itemNo: item.itemNo, name: item.name })),
         stones: stateRef.current.inventory.traits.map((item) => ({ itemNo: item.itemNo, traitId: item.traitId, count: item.count })),
         items: stateRef.current.inventory.potions.map((item) => ({ itemNo: item.itemNo, name: item.name, count: item.count })),
+        materials: stateRef.current.inventory.materials.map((item) => ({ itemNo: item.itemNo, name: item.name, count: item.count })),
       }),
     };
     console.log(
@@ -740,7 +762,7 @@ export function App() {
           <AdventureMenuBar skillPoints={state.skills.points} playerCount={connectedPlayerCount} onOpen={menus.toggle} />
         </div>
 
-        <AdventureActionBars state={state} now={now} leftWeapon={leftWeapon} rightWeapon={rightWeapon} onHoverWeapon={setHoverHand} onActivateWeapon={activate} onActivateHotbar={activateHotbar} />
+        <AdventureActionBars state={state} now={now} leftWeapon={leftWeapon} rightWeapon={rightWeapon} rejectedHotbarSlots={rejectedHotbarSlots} onHoverWeapon={setHoverHand} onActivateWeapon={activate} onActivateHotbar={activateHotbar} />
 
         <div className="adventure-controls">
           <MousePointer2 size={16} />

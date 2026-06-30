@@ -1,7 +1,7 @@
 import { GAME_SETTINGS } from '../../shared/settings';
 import { drawTerrainVisual } from '../../shared/terrainRenderer';
 import { getEffectiveWeapon, getEquippedWeapon, type AdventurePlayerState, type AdventureState, type CombatEffect, type EffectiveWeapon, type HandSlot, type Projectile, type PropParticle } from './state';
-import { getAdventureWorldBounds, type WorldArea, type WorldObject } from './world';
+import { getAdventureWorldBounds, type WorldObject } from './world';
 import { drawBiomeGround } from './world/biomes/render';
 import { ADVENTURE_CHUNK_SIZE, getChunkOrigin } from './world/chunks/coordinates';
 import type { AdventureEnemy } from './enemies/types';
@@ -18,12 +18,16 @@ import type { AdventureRenderMotion } from './multiplayer/motion';
 import { getAdventureRankAtWorldPosition } from './progression/system';
 import { getStatusEffectDefinition } from './status-effects/definitions';
 import type { StatusEffectInstance } from './status-effects/types';
-import { drawSpriteRef } from '../../shared/sprites';
+import { drawSpriteRef, getSpriteDrawSize } from '../../shared/sprites';
 
 const unitBodyHeight = 40;
 const unitBodyFont = 18;
 const unitHandFont = 17;
 const unitHandGap = 8;
+const overworldLocationSprites = {
+  town: { width: 240, height: 160, offsetY: -10, labelY: -94 },
+  cave: { width: 180, height: 180, offsetY: 2, labelY: -78 },
+} as const;
 type ViewBounds = { left: number; top: number; right: number; bottom: number };
 type OverheadEmoteOptions = {
   text: string;
@@ -141,16 +145,21 @@ function drawWorldDrop(ctx: CanvasRenderingContext2D, drop: AdventureState['worl
   ctx.arc(0, 0, 34, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-  ctx.font = '700 27px "Segoe UI Emoji", sans-serif';
+  if (!item.iconSprite || !drawSpriteRef(ctx, item.iconSprite, 0, 0, 34, 34)) {
+    ctx.font = '700 27px "Segoe UI Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.icon, 0, 0);
+  }
+  ctx.font = '900 14px "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(item.icon, 0, 0);
-  ctx.font = '900 14px "Segoe UI", sans-serif';
-  const labelWidth = ctx.measureText(item.name).width + 18;
+  const label = item.name;
+  const labelWidth = ctx.measureText(label).width + 18;
   ctx.fillStyle = 'rgba(20, 22, 27, 0.9)';
   ctx.fillRect(-labelWidth / 2, 24, labelWidth, 24);
   ctx.fillStyle = color;
-  ctx.fillText(item.name, 0, 36);
+  ctx.fillText(label, 0, 36);
   ctx.restore();
 }
 
@@ -201,7 +210,7 @@ function drawMap(ctx: CanvasRenderingContext2D, state: AdventureState, bounds: V
   if (state.scene === 'dungeon' && state.dungeon) {
     drawDungeonMap(ctx, state.dungeon, bounds, now);
     for (const object of getSortedObjects(state.worldObjects)) {
-      if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
+      if (!isPointVisible(object, bounds, getWorldObjectVisibilityRadius(object))) continue;
       drawWorldObject(ctx, object, now, mapSprites);
     }
     return;
@@ -235,9 +244,8 @@ function drawMap(ctx: CanvasRenderingContext2D, state: AdventureState, bounds: V
     ctx.stroke();
   }
   drawAdventureWorldEdge(ctx, bounds);
-  for (const area of state.worldAreas) if (isPointVisible(area, bounds, Math.max(area.width, area.height) / 2)) drawArea(ctx, area);
   for (const object of getSortedObjects(state.worldObjects)) {
-    if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
+    if (!isPointVisible(object, bounds, getWorldObjectVisibilityRadius(object))) continue;
     drawWorldObject(ctx, object, now, mapSprites);
   }
   for (const location of state.worldLocations) if (isPointVisible(location, bounds, 120)) drawWorldLocation(ctx, location, now, mapSprites);
@@ -290,12 +298,12 @@ function drawTownMap(
   ctx.roundRect(-town.width / 2 + 56, -72, town.width - 112, 144, 24);
   ctx.fill();
 
-  drawTownBuilding(ctx, -300, -175, 220, 138, 'SHOP');
-  drawTownBuilding(ctx, 280, -170, 230, 148, 'HALL');
-  drawTownBuilding(ctx, 0, 150, 260, 130, 'GATE');
+  drawTownBuilding(ctx, -300, -175, 220, 138, 'SHOP', mapSprites);
+  drawTownBuilding(ctx, 280, -170, 230, 148, 'HALL', mapSprites);
+  drawTownBuilding(ctx, 0, 150, 260, 130, 'GATE', mapSprites);
 
   for (const object of getSortedObjects(worldObjects)) {
-    if (!isPointVisible(object, bounds, Math.max(object.width, object.height))) continue;
+    if (!isPointVisible(object, bounds, getWorldObjectVisibilityRadius(object))) continue;
     drawWorldObject(ctx, object, now, mapSprites);
   }
   for (const npc of [...town.npcs].sort((a, b) => a.y - b.y)) {
@@ -304,13 +312,21 @@ function drawTownMap(
   drawDungeonExit(ctx, town.exit.x, town.exit.y, now);
 }
 
-function drawTownBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, label: string) {
+function drawTownBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, label: string, mapSprites: boolean) {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = 'rgba(42, 33, 24, 0.22)';
   ctx.beginPath();
   ctx.ellipse(0, height / 2 + 14, width * 0.47, 16, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (mapSprites && drawSpriteRef(ctx, { sheetId: 'sheet-01', x: 3, y: 14, cellsWide: 3, cellsHigh: 2 }, 0, -6, width, height * 1.2)) {
+    ctx.fillStyle = '#fff0c0';
+    ctx.font = '900 18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, 0, -height / 2 - 16);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = '#c48a4a';
   ctx.strokeStyle = '#704622';
   ctx.lineWidth = 5;
@@ -341,8 +357,8 @@ function drawTownNpc(ctx: CanvasRenderingContext2D, npc: TownNpcDefinition, now:
     y: npc.y,
     facing: npc.facing,
     body: npc.body,
-    leftHand: npc.kind === 'merchant' ? '[' : undefined,
-    rightHand: npc.kind === 'merchant' ? ']' : undefined,
+    leftHand: npc.kind === 'merchant' ? '[' : npc.kind === 'blacksmith' ? '<' : undefined,
+    rightHand: npc.kind === 'merchant' ? ']' : npc.kind === 'blacksmith' ? 'T' : undefined,
     color: npc.color,
     pillWidth: npc.pillWidth,
     stroke: '#6d8158',
@@ -470,12 +486,32 @@ function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocatio
   ctx.save();
   ctx.translate(location.x, location.y);
   const rank = location.kind === 'town' ? undefined : getAdventureRankAtWorldPosition(location);
-  const pulse = 1 + Math.sin(now / 500 + location.x) * 0.025;
+  const townSprite = overworldLocationSprites.town;
+  if (mapSprites && location.kind === 'town' && drawSpriteRef(ctx, { sheetId: 'sheet-01', x: 0, y: 14, cellsWide: 3, cellsHigh: 2 }, 0, townSprite.offsetY, townSprite.width, townSprite.height)) {
+    ctx.fillStyle = '#f1e7c4';
+    ctx.font = '900 18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(location.name, 0, townSprite.labelY);
+    ctx.restore();
+    return;
+  }
+  const caveSprite = overworldLocationSprites.cave;
+  if (mapSprites && location.kind === 'cave' && drawSpriteRef(ctx, { sheetId: 'sheet-01', x: 0, y: 12, cellsWide: 2, cellsHigh: 2 }, 0, caveSprite.offsetY, caveSprite.width, caveSprite.height)) {
+    ctx.fillStyle = '#f1e7c4';
+    ctx.font = '900 18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${location.name} [${rank}]`, 0, caveSprite.labelY);
+    ctx.restore();
+    return;
+  }
+  const pulse = location.kind === 'town' ? 1 : 1 + Math.sin(now / 500 + location.x) * 0.025;
   ctx.scale(pulse, pulse);
-  ctx.fillStyle = 'rgba(27, 31, 30, 0.26)';
-  ctx.beginPath();
-  ctx.ellipse(0, 34, 66, 20, 0, 0, Math.PI * 2);
-  ctx.fill();
+  if (location.kind !== 'town') {
+    ctx.fillStyle = 'rgba(27, 31, 30, 0.26)';
+    ctx.beginPath();
+    ctx.ellipse(0, 34, 66, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (location.kind === 'town') {
     ctx.fillStyle = '#bd7b42';
     ctx.strokeStyle = '#704622';
@@ -498,14 +534,6 @@ function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocatio
     ctx.font = '900 18px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(location.name, 0, -94);
-    ctx.restore();
-    return;
-  }
-  if (mapSprites && location.kind === 'cave' && drawSpriteRef(ctx, { sheetId: 'adventure-props-01', x: 0, y: 1 }, 0, 2, 138, 138)) {
-    ctx.fillStyle = '#f1e7c4';
-    ctx.font = '900 18px "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${location.name} [${rank}]`, 0, -78);
     ctx.restore();
     return;
   }
@@ -598,7 +626,10 @@ function intersectsBounds(bounds: ViewBounds, x: number, y: number, width: numbe
 function getSortedObjects(objects: WorldObject[]) {
   const cached = sortedObjectsCache.get(objects);
   if (cached) return cached;
-  const sorted = [...objects].sort((a, b) => a.y - b.y);
+  const sorted = [...objects].sort((a, b) =>
+    (a.renderPriority ?? 0) - (b.renderPriority ?? 0)
+    || a.y - b.y
+  );
   sortedObjectsCache.set(objects, sorted);
   return sorted;
 }
@@ -607,14 +638,10 @@ function isPointVisible(point: { x: number; y: number }, bounds: ViewBounds, mar
   return point.x >= bounds.left - margin && point.x <= bounds.right + margin && point.y >= bounds.top - margin && point.y <= bounds.bottom + margin;
 }
 
-
-function drawArea(ctx: CanvasRenderingContext2D, area: WorldArea) {
-  ctx.save();
-  ctx.fillStyle = 'rgba(57, 65, 51, 0.5)';
-  ctx.font = '900 22px "Segoe UI", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(area.name, area.x, area.y - area.height / 2 - 28);
-  ctx.restore();
+function getWorldObjectVisibilityRadius(object: WorldObject) {
+  if (!object.sprite) return Math.max(object.width, object.height);
+  const spriteSize = getSpriteDrawSize(object.sprite);
+  return Math.max(object.width, object.height, spriteSize.width, spriteSize.height);
 }
 
 function drawWorldObject(ctx: CanvasRenderingContext2D, object: WorldObject, now: number, mapSprites: boolean) {

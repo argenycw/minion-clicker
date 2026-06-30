@@ -178,12 +178,11 @@ function makeCorridor(from: DungeonRoom, to: DungeonRoom): DungeonRect {
 }
 
 function makeDungeonObject(entranceId: string, prop: DungeonProp, index: number): WorldObject {
-  const object = createProp('rock', {
+  const object = createProp('rock-04', {
     id: makeDungeonEntityId('dungeon-object', entranceId, index + 1),
     x: prop.x,
     y: prop.y,
     scale: prop.kind === 'stalagmite' ? prop.scale * 1.18 : prop.scale * 1.35,
-    rotation: prop.rotation,
   });
   return {
     ...object,

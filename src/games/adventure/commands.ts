@@ -1,5 +1,6 @@
 import type { AdventurePlayerId, HandSlot } from './state';
 import type { ShopId, ShopStockId } from './shops/types';
+import type { CraftingIngredientSelection } from './crafting/types';
 
 export type AdventureInputCommand = {
   type: 'input';
@@ -26,9 +27,10 @@ export type AdventureCommand =
   | { type: 'applyTrait'; playerId: AdventurePlayerId; tick: number; traitId: string; weaponInstanceId: string }
   | { type: 'removeTrait'; playerId: AdventurePlayerId; tick: number; weaponInstanceId: string; index: number }
   | { type: 'usePotion'; playerId: AdventurePlayerId; tick: number; itemNo: number }
+  | { type: 'craftItem'; playerId: AdventurePlayerId; tick: number; itemId: string; selections?: CraftingIngredientSelection[] }
   | { type: 'buyShopItem'; playerId: AdventurePlayerId; tick: number; shopId: ShopId; stockId: ShopStockId; quantity: number }
   | { type: 'sellShopItem'; playerId: AdventurePlayerId; tick: number; shopId: ShopId; kind: 'weapon' | 'trait' | 'potion'; itemNo: number; quantity: number }
-  | { type: 'dispose'; playerId: AdventurePlayerId; tick: number; kind: 'weapon' | 'trait' | 'potion'; itemNo: number }
+  | { type: 'dispose'; playerId: AdventurePlayerId; tick: number; kind: 'weapon' | 'trait' | 'potion' | 'material'; itemNo: number }
   | { type: 'respawn'; playerId: AdventurePlayerId; tick: number };
 
 export function keysToAdventureInputCommand(

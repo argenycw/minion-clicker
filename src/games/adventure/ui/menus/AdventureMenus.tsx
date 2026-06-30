@@ -3,12 +3,16 @@ import type { AdventureState, HandSlot } from '../../state';
 import type { useGraphicsSettings } from '../../../../shared/graphicsSettings';
 import { CharacterMenu } from './CharacterMenu';
 import { InventoryMenuContent } from './CharacterMenuContent';
+import { CraftingMenu } from './CraftingMenu';
 import { MultiplayerMenu } from './MultiplayerMenu';
 import { SettingsMenu } from './SettingsMenu';
 import { ShopMenu } from './ShopMenu';
 import { SkillsMenu } from './SkillsMenu';
 import type { AdventureMenusController, InventoryItemKind } from './useAdventureMenus';
 import type { ShopId, ShopStockId } from '../../shops/types';
+import type { CraftingIngredientSelection } from '../../crafting/types';
+
+type SellableInventoryItemKind = Exclude<InventoryItemKind, 'material'>;
 
 export type AdventureMenuActions = {
   unlockSkill: (skillId: string) => void;
@@ -18,9 +22,10 @@ export type AdventureMenuActions = {
   applyTrait: (traitId: string, weaponInstanceId: string) => void;
   removeTrait: (weaponInstanceId: string, index: number) => void;
   usePotion: (itemNo: number) => void;
+  craftItem: (itemId: string, selections?: CraftingIngredientSelection[]) => void;
   equipItem: (itemNo: number, slot: number) => void;
   buyShopItem: (shopId: ShopId, stockId: ShopStockId, quantity: number) => void;
-  sellShopItem: (shopId: ShopId, kind: InventoryItemKind, itemNo: number, quantity: number) => void;
+  sellShopItem: (shopId: ShopId, kind: SellableInventoryItemKind, itemNo: number, quantity: number) => void;
   customizeCharacter: (changes: { body?: string; color?: string; pillWidth?: number }) => void;
   equipOutfit: (outfitId: string) => void;
   disposeItem: (kind: InventoryItemKind, itemNo: number) => void;
@@ -69,6 +74,15 @@ export function AdventureMenus({ state, menus, actions, graphics, onGraphicsChan
           onCloseTraitPicker={menus.closeTraitPicker}
         />
       </CharacterSkillsMenu>
+    )}
+    {menus.active === 'crafting' && (
+      <CraftingMenu
+        state={state}
+        selectedItemId={menus.selectedCraftItemId}
+        onSelectItem={menus.selectCraftItem}
+        onCraft={actions.craftItem}
+        onClose={menus.close}
+      />
     )}
     {menus.active === 'settings' && <SettingsMenu graphics={graphics} onGraphicsChange={onGraphicsChange} onClose={menus.close} />}
     {menus.active === 'shop' && menus.activeShopId && (

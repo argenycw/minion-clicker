@@ -2,12 +2,13 @@ import { getTrait } from '../../content';
 import { getEffectiveWeapon, type AdventureState, type HandSlot } from '../../state';
 import { getOutfit } from '../../outfits';
 import { getSkill } from '../../skills';
-import { ITEM_RANK_COLORS } from '../../loot';
+import { getAdventureItem, ITEM_RANK_COLORS } from '../../loot';
 import type { InventoryItemKind, InventorySelection } from './useAdventureMenus';
 import { AttributeRow } from './MenuPrimitives';
 import { StonePicker } from './StonePicker';
 import { getTraitEffectSummary, formatStatBonus } from './inventoryPresentation';
 import { StoneIcon } from './StoneIcon';
+import { ItemIcon } from './ItemIcon';
 import { DisposeButton, InspectorHeader } from './InspectorPrimitives';
 
 function StatPill({ label, value }: { label: string; value: number }) {
@@ -206,6 +207,26 @@ export function ItemInspector({
     );
   }
 
+  if (selection.kind === 'material') {
+    const material = state.inventory.materials.find((item) => item.itemNo === selection.itemNo);
+    if (!material) return null;
+    const definition = getAdventureItem(material.itemId);
+    return (
+      <section className="item-inspector">
+        <InspectorHeader icon={<ItemIcon icon={material.icon} sprite={material.iconSprite} />} color={ITEM_RANK_COLORS[material.rank]} name={material.name} itemNo={material.itemNo} />
+        <div className="inspector-scroll">
+          <p>{definition.description} {material.name} is a {material.category.replace('-', ' ')} crafting material. Stack: x{material.count}</p>
+          <div className="weapon-stat-grid">
+            <StatPill label="Count" value={material.count} />
+          </div>
+        </div>
+        <div className="inspector-actions">
+          <DisposeButton onDispose={() => onDispose('material', material.itemNo)} />
+        </div>
+      </section>
+    );
+  }
+
   const potion = state.inventory.potions.find((item) => item.itemNo === selection.itemNo);
   if (!potion) return null;
   return (
@@ -240,4 +261,3 @@ export function ItemInspector({
     </section>
   );
 }
-

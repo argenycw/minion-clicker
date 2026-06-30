@@ -33,6 +33,8 @@ import {
   usePotionByItemNo,
 } from './inventory/system';
 import { equipSkillToSlot, unlockSkill } from './skills/system';
+import { craftAdventureItem } from './crafting/system';
+import type { CraftingIngredientSelection } from './crafting/types';
 
 export type AdventureAction =
   | { type: 'tick'; now: number; keys: Set<string>; aim: { x: number; y: number } }
@@ -48,7 +50,8 @@ export type AdventureAction =
   | { type: 'applyTrait'; traitId: string; weaponInstanceId: string }
   | { type: 'removeTrait'; weaponInstanceId: string; index: number }
   | { type: 'usePotion'; itemNo: number; now: number }
-  | { type: 'dispose'; kind: 'weapon' | 'trait' | 'potion'; itemNo: number }
+  | { type: 'craftItem'; itemId: string; selections?: CraftingIngredientSelection[] }
+  | { type: 'dispose'; kind: 'weapon' | 'trait' | 'potion' | 'material'; itemNo: number }
   | { type: 'buyShopItem'; shopId: import('./shops/types').ShopId; stockId: import('./shops/types').ShopStockId; quantity: number }
   | { type: 'sellShopItem'; shopId: import('./shops/types').ShopId; kind: 'weapon' | 'trait' | 'potion'; itemNo: number; quantity: number }
   | { type: 'dropLoot'; itemId: string; now: number }
@@ -82,7 +85,8 @@ function reduceAdventureAction(state: AdventureState, action: AdventureAction): 
   if (action.type === 'applyTrait') return applyTraitToWeapon(state, action.traitId, action.weaponInstanceId);
   if (action.type === 'removeTrait') return removeTraitFromWeapon(state, action.weaponInstanceId, action.index);
   if (action.type === 'usePotion') return usePotionByItemNo(state, action.itemNo, action.now);
-  if (action.type === 'dispose') return disposeInventoryItem(state, action.kind === 'potion' ? 'potion' : action.kind, action.itemNo);
+  if (action.type === 'craftItem') return craftAdventureItem(state, action.itemId, action.selections);
+  if (action.type === 'dispose') return disposeInventoryItem(state, action.kind, action.itemNo);
   if (action.type === 'buyShopItem') return buyAdventureShopItem(state, action.shopId, action.stockId, action.quantity);
   if (action.type === 'sellShopItem') return sellAdventureShopItem(state, action.shopId, action.kind, action.itemNo, action.quantity);
   if (action.type === 'dropLoot') return dropLootAtPlayer(state, action.itemId, action.now);
@@ -122,8 +126,9 @@ function applyAdventureCommand(state: AdventureState, command: AdventureCommand,
   if (command.type === 'applyTrait') return restoreLocalPlayer(applyTraitToWeapon(scoped, command.traitId, command.weaponInstanceId));
   if (command.type === 'removeTrait') return restoreLocalPlayer(removeTraitFromWeapon(scoped, command.weaponInstanceId, command.index));
   if (command.type === 'usePotion') return restoreLocalPlayer(usePotionByItemNo(scoped, command.itemNo, now));
+  if (command.type === 'craftItem') return restoreLocalPlayer(craftAdventureItem(scoped, command.itemId, command.selections));
   if (command.type === 'buyShopItem') return restoreLocalPlayer(buyAdventureShopItem(scoped, command.shopId, command.stockId, command.quantity));
   if (command.type === 'sellShopItem') return restoreLocalPlayer(sellAdventureShopItem(scoped, command.shopId, command.kind, command.itemNo, command.quantity));
   if (command.type === 'respawn') return restoreLocalPlayer(respawnAdventurePlayer(scoped, now));
-  return restoreLocalPlayer(disposeInventoryItem(scoped, command.kind === 'potion' ? 'potion' : command.kind, command.itemNo));
+  return restoreLocalPlayer(disposeInventoryItem(scoped, command.kind, command.itemNo));
 }

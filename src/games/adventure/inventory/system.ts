@@ -133,7 +133,7 @@ export function equipPotionToSlot(state: AdventureState, itemNo: number, slot: n
   };
 }
 
-export function disposeInventoryItem(state: AdventureState, kind: 'weapon' | 'trait' | 'potion', itemNo: number): AdventureState {
+export function disposeInventoryItem(state: AdventureState, kind: 'weapon' | 'trait' | 'potion' | 'material', itemNo: number): AdventureState {
   if (kind === 'weapon') {
     const weapon = getWeaponByItemNo(state, itemNo);
     if (!weapon || weapon.id === state.character.leftWeaponInstanceId || weapon.id === state.character.rightWeaponInstanceId) return state;
@@ -141,6 +141,9 @@ export function disposeInventoryItem(state: AdventureState, kind: 'weapon' | 'tr
   }
   if (kind === 'trait') {
     return { ...state, inventory: { ...state.inventory, traits: state.inventory.traits.filter((item) => item.itemNo !== itemNo) } };
+  }
+  if (kind === 'material') {
+    return { ...state, inventory: { ...state.inventory, materials: state.inventory.materials.filter((item) => item.itemNo !== itemNo) } };
   }
   return {
     ...state,

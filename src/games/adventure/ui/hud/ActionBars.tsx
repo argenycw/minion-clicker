@@ -9,11 +9,12 @@ function getCooldownMask(cooldown: number) {
   return `conic-gradient(from 0deg, rgba(18, 22, 28, 0) 0 ${elapsed * 100}%, ${cooldownMaskColor} 0 100%)`;
 }
 
-export function HotbarSlotButton({ slot, state, now, onActivate }: { slot: number; state: AdventureState; now: number; onActivate: () => void }) {
+export function HotbarSlotButton({ slot, state, now, rejectedAt, onActivate }: { slot: number; state: AdventureState; now: number; rejectedAt?: number; onActivate: () => void }) {
   const entry = state.hotbarSlots[slot - 1];
   const flashed = state.itemFlash.some((flash) => flash.slot === slot);
+  const rejectedClass = rejectedAt ? ' cooldown-rejected' : '';
   if (!entry) {
-    return <button className={flashed ? 'item-slot item-used' : 'item-slot'} type="button" onClick={onActivate} title={`Empty hotbar slot ${slot}`}>
+    return <button className={`${flashed ? 'item-slot item-used' : 'item-slot'}${rejectedClass}`} type="button" onClick={onActivate} title={`Empty hotbar slot ${slot}`}>
       <small>{slot}</small><FlaskConical size={18} />
     </button>;
   }
@@ -23,7 +24,7 @@ export function HotbarSlotButton({ slot, state, now, onActivate }: { slot: numbe
     const cooldownMs = item?.cooldownMs ?? 1;
     const remaining = Math.max(0, readyAt - now);
     const cooldown = Math.min(1, remaining / cooldownMs);
-    return <button className={`item-slot ${remaining <= 0 ? 'ready' : ''} ${flashed ? 'item-used' : ''}`} type="button" onClick={onActivate} title={item ? `${item.name} x${item.count}` : 'Unavailable item'}>
+    return <button className={`item-slot ${remaining <= 0 ? 'ready' : ''} ${flashed ? 'item-used' : ''}${rejectedClass}`} type="button" onClick={onActivate} title={item ? `${item.name} x${item.count}` : 'Unavailable item'}>
       <small>{slot}</small><span>{item?.icon ?? '×'}</span>{item && <em>x{item.count}</em>}
       <span className="weapon-cooldown" style={{ background: getCooldownMask(cooldown), opacity: remaining > 0 ? 1 : 0 }} />
       {remaining > 0 && <strong className="slot-cooldown-time">{Math.ceil(remaining / 1000)}s</strong>}
@@ -34,7 +35,7 @@ export function HotbarSlotButton({ slot, state, now, onActivate }: { slot: numbe
   const cooldownMs = skill.active?.cooldownMs ?? 1;
   const remaining = Math.max(0, readyAt - now);
   const cooldown = Math.min(1, remaining / cooldownMs);
-  return <button className={`item-slot active-skill-slot ${remaining <= 0 ? 'ready' : ''} ${flashed ? 'item-used' : ''}`} type="button" onClick={onActivate} title={`${skill.name}: ${skill.description}`}>
+  return <button className={`item-slot active-skill-slot ${remaining <= 0 ? 'ready' : ''} ${flashed ? 'item-used' : ''}${rejectedClass}`} type="button" onClick={onActivate} title={`${skill.name}: ${skill.description}`}>
     <small>{slot}</small>
     <span className="active-skill-glyph" style={{ color: skill.color }}>{skill.icon}</span>
     <span className="weapon-cooldown" style={{ background: getCooldownMask(cooldown), opacity: remaining > 0 ? 1 : 0 }} />
@@ -99,11 +100,12 @@ export function WeaponSlot({
   );
 }
 
-export function AdventureActionBars({ state, now, leftWeapon, rightWeapon, onHoverWeapon, onActivateWeapon, onActivateHotbar }: {
+export function AdventureActionBars({ state, now, leftWeapon, rightWeapon, rejectedHotbarSlots, onHoverWeapon, onActivateWeapon, onActivateHotbar }: {
   state: AdventureState;
   now: number;
   leftWeapon?: EffectiveWeapon;
   rightWeapon?: EffectiveWeapon;
+  rejectedHotbarSlots?: Record<number, number>;
   onHoverWeapon: (hand: HandSlot | undefined) => void;
   onActivateWeapon: (hand: HandSlot) => void;
   onActivateHotbar: (slot: number) => void;
@@ -114,7 +116,10 @@ export function AdventureActionBars({ state, now, leftWeapon, rightWeapon, onHov
       <WeaponSlot hand="right" label="R" weapon={rightWeapon} readyAt={state.cooldownReadyAt.right} now={now} active={state.weaponFlash.some((flash) => flash.hand === 'right')} onHover={onHoverWeapon} onActivate={() => onActivateWeapon('right')} />
     </div>
     <div className="adventure-items" aria-label="Hotbar slots">
-      {[1, 2, 3, 4, 5].map((slot) => <HotbarSlotButton key={slot} slot={slot} state={state} now={now} onActivate={() => onActivateHotbar(slot)} />)}
+      {[1, 2, 3, 4, 5].map((slot) => {
+        const rejectedAt = rejectedHotbarSlots?.[slot];
+        return <HotbarSlotButton key={`${slot}-${rejectedAt ?? 0}`} slot={slot} state={state} now={now} rejectedAt={rejectedAt} onActivate={() => onActivateHotbar(slot)} />;
+      })}
     </div>
   </>;
 }

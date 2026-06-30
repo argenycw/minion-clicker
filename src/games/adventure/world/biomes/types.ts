@@ -1,13 +1,11 @@
 import type { WorldObjectKind } from '../types';
 import type { AdventureRank } from '../../progression/types';
 
-export type BiomeId = 'biome-01' | 'biome-02';
+export type BiomeId = 'biome-01' | 'biome-02' | 'biome-03' | 'biome-04' | 'biome-05' | 'biome-06' | 'biome-07';
 
 export type BiomePropEntry = {
   kind: WorldObjectKind;
   weight: number;
-  minScale: number;
-  maxScale: number;
 };
 
 export type BiomeEnemyEntry = {

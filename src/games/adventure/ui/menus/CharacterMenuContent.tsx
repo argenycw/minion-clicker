@@ -6,6 +6,7 @@ import { SkillTreePanel } from './SkillsMenuContent';
 import { CharacterEditor } from './CharacterEditor';
 import { InventoryGroup, InventorySlot } from './InventoryGrid';
 import { ItemInspector } from './ItemInspector';
+import { ItemIcon } from './ItemIcon';
 import { StoneIcon } from './StoneIcon';
 
 export function InventoryMenuContent({
@@ -74,11 +75,23 @@ export function InventoryMenuContent({
                 key={item.itemNo}
                 selected={selectedItem?.kind === 'potion' && selectedItem.itemNo === item.itemNo}
                 itemNo={item.itemNo}
-                icon={item.icon}
+                icon={<ItemIcon icon={item.icon} sprite={item.iconSprite} />}
                 name={item.name}
                 rarityBackground={ITEM_RANK_BACKGROUNDS[item.rank]}
                 countLabel={`x${item.count}`}
                 onClick={() => onSelectItem({ kind: 'potion', itemNo: item.itemNo })}
+              />
+            ))}
+            {state.inventory.materials.map((item) => (
+              <InventorySlot
+                key={item.itemNo}
+                selected={selectedItem?.kind === 'material' && selectedItem.itemNo === item.itemNo}
+                itemNo={item.itemNo}
+                icon={<ItemIcon icon={item.icon} sprite={item.iconSprite} />}
+                name={item.name}
+                rarityBackground={ITEM_RANK_BACKGROUNDS[item.rank]}
+                countLabel={`x${item.count}`}
+                onClick={() => onSelectItem({ kind: 'material', itemNo: item.itemNo })}
               />
             ))}
           </InventoryGroup>

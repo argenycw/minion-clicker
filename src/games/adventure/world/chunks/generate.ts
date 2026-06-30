@@ -11,7 +11,7 @@ import { adventureWorld } from '../index';
 import { getBiome } from '../biomes/definitions';
 import { generateBiomeTilesRegion } from '../biomes/generate';
 import type { BiomeEnemyEntry, BiomePropEntry, BiomeTile } from '../biomes/types';
-import { createProp } from '../props';
+import { createProp, propDefinitions } from '../props';
 import type { WorldArea, WorldObject } from '../types';
 import { authoredAdventureLocations } from '../locations/definitions';
 import type { WorldLocation } from '../locations/types';
@@ -158,13 +158,16 @@ function generateWildernessObjects(coordinate: ChunkCoordinate, chunkSeed: numbe
     const biome = getBiomeAtTiles(biomeTiles, x, y);
     if (random(chunkSeed, index * 11 + 3) > biome.propDensity) continue;
     const entry = pickWeighted(biome.props, random(chunkSeed, index * 11 + 4));
-    const scale = entry.minScale + random(chunkSeed, index * 11 + 5) * (entry.maxScale - entry.minScale);
+    const definition = propDefinitions[entry.kind];
+    if (!definition) continue;
+    const scaleRange = definition.scaleRange ?? [1, 1];
+    const scale = scaleRange[0] + random(chunkSeed, index * 11 + 5) * (scaleRange[1] - scaleRange[0]);
     objects.push(createProp(entry.kind, {
       id: makeGeneratedId('wild', coordinate, index),
       x,
       y,
       scale,
-      rotation: random(chunkSeed, index * 11 + 6) * Math.PI * 2,
+      flipX: definition.randomFlipX ? random(chunkSeed, index * 11 + 6) > 0.5 : false,
       biomeId: biome.id,
     }));
   }
@@ -238,8 +241,8 @@ function generateAreas(coordinate: ChunkCoordinate, chunkSeed: number, spawn: { 
     && area.y < origin.y + ADVENTURE_CHUNK_SIZE
   ));
   if (random(chunkSeed, 301) < 0.16) {
-    const width = 520 + random(chunkSeed, 302) * 260;
-    const height = 420 + random(chunkSeed, 303) * 220;
+    const width = 820 + random(chunkSeed, 302) * 320;
+    const height = 620 + random(chunkSeed, 303) * 260;
     const area: WorldArea = {
       id: makeGeneratedId('area', coordinate, 1),
       kind: 'ruin',

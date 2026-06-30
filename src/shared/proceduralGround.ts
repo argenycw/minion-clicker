@@ -11,9 +11,15 @@ export type ProceduralGroundTile = {
   blend: number;
 };
 
+export type ProceduralGroundPalette = {
+  light: string;
+  dark: string;
+  detail: string[];
+};
+
 const TILE_SIZE = 160;
 const REGION_TILES = 7;
-const palettes = {
+const palettes: Record<string, ProceduralGroundPalette> = {
   green: { light: '#b9db8b', dark: '#9bc76f', detail: ['#e8d668', '#e9dce0', '#709b45'] },
   dry: { light: '#e4cd83', dark: '#c8a95f', detail: ['#8f8a4b', '#b67c3e', '#eee0a2'] },
 };
@@ -67,15 +73,16 @@ export function drawProceduralGround(
   bounds?: { left: number; top: number; right: number; bottom: number },
   ambientEffects = true,
   origin = { x: 0, y: 0 },
+  resolvePalette: (tile: ProceduralGroundTile) => ProceduralGroundPalette = (tile) => palettes[tile.kind] ?? palettes.green,
 ) {
-  const ground = getGroundCanvas(tiles);
+  const ground = getGroundCanvas(tiles, resolvePalette);
   const groundOriginX = Math.min(...tiles.map((tile) => tile.x));
   const groundOriginY = Math.min(...tiles.map((tile) => tile.y));
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(ground, groundOriginX, groundOriginY, ground.width * TILE_SIZE, ground.height * TILE_SIZE);
   for (const tile of tiles) {
     if (bounds && !intersects(bounds, tile.x, tile.y, tile.width, tile.height)) continue;
-    const palette = palettes[tile.kind];
+    const palette = resolvePalette(tile);
     drawTilePatches(ctx, tile, palette.light, palette.dark);
     drawTileDetails(ctx, tile, palette.detail);
   }
@@ -92,7 +99,7 @@ function intersects(bounds: { left: number; top: number; right: number; bottom: 
   return x + width >= bounds.left && x <= bounds.right && y + height >= bounds.top && y <= bounds.bottom;
 }
 
-function getGroundCanvas(tiles: ProceduralGroundTile[]) {
+function getGroundCanvas(tiles: ProceduralGroundTile[], resolvePalette: (tile: ProceduralGroundTile) => ProceduralGroundPalette) {
   const cached = cachedGround.get(tiles);
   if (cached) return cached;
   const firstX = Math.min(...tiles.map((tile) => tile.x));
@@ -106,11 +113,9 @@ function getGroundCanvas(tiles: ProceduralGroundTile[]) {
   if (!context) return canvas;
   const image = context.createImageData(columns, rows);
   tiles.forEach((tile) => {
-    const blend = smoothstep(0.24, 0.78, tile.blend);
     const tone = (tile.variant - 0.5) * 0.1;
-    const green = mixHex(palettes.green.dark, palettes.green.light, 0.5 + tone);
-    const dry = mixHex(palettes.dry.dark, palettes.dry.light, 0.5 + tone);
-    const color = mixRgb(green, dry, blend);
+    const palette = resolvePalette(tile);
+    const color = mixHex(palette.dark, palette.light, 0.5 + tone);
     const column = Math.round((tile.x - firstX) / TILE_SIZE);
     const row = Math.round((tile.y - firstY) / TILE_SIZE);
     image.data.set([...color, 255], (row * columns + column) * 4);
