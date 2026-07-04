@@ -28,6 +28,7 @@ export function InventoryMenuContent({
   onEquipOutfit,
   onDispose,
   traitPickerWeaponNo,
+  traitPickerSlotIndex,
   onOpenTraitPicker,
   onCloseTraitPicker,
 }: {
@@ -41,7 +42,7 @@ export function InventoryMenuContent({
   onSelectItem: (selection: InventorySelection | undefined) => void;
   onEquip: (hand: HandSlot, weaponInstanceId: string) => void;
   onUnequip: (hand: HandSlot) => void;
-  onApplyTrait: (traitId: string, weaponInstanceId: string) => void;
+  onApplyTrait: (traitId: string, weaponInstanceId: string, slotIndex?: number) => void;
   onRemoveTrait: (weaponInstanceId: string, index: number) => void;
   onUse: (itemNo: number) => void;
   onEquipItem: (itemNo: number, slot: number) => void;
@@ -49,7 +50,8 @@ export function InventoryMenuContent({
   onEquipOutfit: (outfitId: string) => void;
   onDispose: (kind: InventoryItemKind, itemNo: number) => void;
   traitPickerWeaponNo: number | undefined;
-  onOpenTraitPicker: (weaponItemNo: number) => void;
+  traitPickerSlotIndex: number | undefined;
+  onOpenTraitPicker: (weaponItemNo: number, slotIndex: number) => void;
   onCloseTraitPicker: () => void;
 }) {
   return view === 'skills' ? (
@@ -149,6 +151,7 @@ export function InventoryMenuContent({
             onEquipOutfit={onEquipOutfit}
             onDispose={onDispose}
             traitPickerWeaponNo={traitPickerWeaponNo}
+            traitPickerSlotIndex={traitPickerSlotIndex}
             onOpenTraitPicker={onOpenTraitPicker}
             onCloseTraitPicker={onCloseTraitPicker}
           />

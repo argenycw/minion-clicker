@@ -11,7 +11,7 @@ export function createAdventureMenuActions(
     equipSkill: (skillId, slot) => sendCommand({ type: 'equipSkill', ...getCommandContext(), skillId, slot }),
     equipWeapon: (hand, weaponInstanceId) => sendCommand({ type: 'equipWeapon', ...getCommandContext(), hand, weaponInstanceId }),
     unequipWeapon: (hand) => sendCommand({ type: 'unequipWeapon', ...getCommandContext(), hand }),
-    applyTrait: (traitId, weaponInstanceId) => sendCommand({ type: 'applyTrait', ...getCommandContext(), traitId, weaponInstanceId }),
+    applyTrait: (traitId, weaponInstanceId, slotIndex) => sendCommand({ type: 'applyTrait', ...getCommandContext(), traitId, weaponInstanceId, slotIndex }),
     removeTrait: (weaponInstanceId, index) => sendCommand({ type: 'removeTrait', ...getCommandContext(), weaponInstanceId, index }),
     usePotion: (itemNo) => sendCommand({ type: 'usePotion', ...getCommandContext(), itemNo }),
     craftItem: (itemId, selections) => sendCommand({ type: 'craftItem', ...getCommandContext(), itemId, selections }),

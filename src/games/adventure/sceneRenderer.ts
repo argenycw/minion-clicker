@@ -972,6 +972,10 @@ function drawEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: nu
     drawDeathEffect(ctx, effect, now);
     return;
   }
+  if (effect.kind === 'shockwave') {
+    drawShockwaveEffect(ctx, effect, now);
+    return;
+  }
   const life = effect.kind === 'damage' || effect.kind === 'heal' ? 950 : 420;
   const t = Math.min(1, (now - effect.born) / life);
   ctx.save();
@@ -996,6 +1000,24 @@ function drawEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: nu
     const y = effect.y + ((effect.toY ?? effect.y) - effect.y) * travel;
     ctx.fillText(effect.glyph, x, y);
   }
+  ctx.restore();
+}
+
+function drawShockwaveEffect(ctx: CanvasRenderingContext2D, effect: CombatEffect, now: number) {
+  const t = Math.min(1, (now - effect.born) / 520);
+  const radius = Math.max(12, (effect.size ?? 80) * (0.2 + t * 0.8));
+  ctx.save();
+  ctx.globalAlpha = 0.42 * (1 - t);
+  ctx.strokeStyle = effect.color;
+  ctx.lineWidth = Math.max(2, 9 * (1 - t));
+  ctx.beginPath();
+  ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.12 * (1 - t);
+  ctx.fillStyle = effect.color;
+  ctx.beginPath();
+  ctx.arc(effect.x, effect.y, radius * 0.72, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 

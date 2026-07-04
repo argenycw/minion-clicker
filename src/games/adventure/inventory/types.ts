@@ -9,7 +9,7 @@ export type WeaponInstance = {
   id: string;
   baseWeaponId: string;
   name: string;
-  traitIds: string[];
+  traitIds: Array<string | undefined>;
 };
 
 export type TraitStack = {
@@ -58,6 +58,16 @@ export type EffectiveWeapon = WeaponDefinition & {
   baseAttackSpeed: number;
   baseRange: number;
   baseRadius: number;
+  penetration: number;
+  follow: number;
+  ricochet: number;
+  meleeExtraHits: number;
+  shockwaveRadiusMultiplier: number;
+  shockwaveDamageMultiplier: number;
+  aftershockCount: number;
+  aftershockDamageMultiplier: number;
+  aftershockDelayMs: number;
+  aftershockSpacingMultiplier: number;
   lifeDrain: number;
   shield: number;
   inflictions: StatusEffectApplication[];

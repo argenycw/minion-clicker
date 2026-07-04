@@ -12,6 +12,7 @@ export type TraitDefinition = {
   icon: string;
   color: string;
   family: 'attack' | 'defense' | 'utility' | 'magic' | 'impact';
+  weaponAffinity?: 'melee' | 'projectile';
   description: string;
   damageConstant?: number;
   damageMultiplier?: number;
@@ -19,6 +20,18 @@ export type TraitDefinition = {
   rangeMultiplier?: number;
   radiusMultiplier?: number;
   extraProjectiles?: number;
+  penetration?: number;
+  follow?: number;
+  ricochet?: number;
+  meleeExtraHits?: number;
+  shockwaveRadiusMultiplier?: number;
+  shockwaveDamageMultiplier?: number;
+  aftershock?: {
+    count: number;
+    damageMultiplier: number;
+    delay: number;
+    spacingMultiplier?: number;
+  };
   lifeDrain?: number;
   shield?: number;
   inflict?: {
@@ -60,6 +73,7 @@ function validateTrait(input: unknown): TraitDefinition {
     icon: trait.icon,
     color: trait.color,
     family: trait.family ?? 'utility',
+    weaponAffinity: trait.weaponAffinity,
     description: trait.description ?? '',
     damageConstant: trait.damageConstant,
     damageMultiplier: trait.damageMultiplier,
@@ -67,6 +81,13 @@ function validateTrait(input: unknown): TraitDefinition {
     rangeMultiplier: trait.rangeMultiplier,
     radiusMultiplier: trait.radiusMultiplier,
     extraProjectiles: trait.extraProjectiles,
+    penetration: trait.penetration,
+    follow: trait.follow,
+    ricochet: trait.ricochet,
+    meleeExtraHits: trait.meleeExtraHits,
+    shockwaveRadiusMultiplier: trait.shockwaveRadiusMultiplier,
+    shockwaveDamageMultiplier: trait.shockwaveDamageMultiplier,
+    aftershock: trait.aftershock ? { ...trait.aftershock } : undefined,
     lifeDrain: trait.lifeDrain,
     shield: trait.shield,
     inflict: trait.inflict ? { ...trait.inflict } : undefined,

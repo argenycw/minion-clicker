@@ -4,6 +4,7 @@ import { getStatusEffectDefinition } from '../../status-effects/definitions';
 
 export function getTraitEffectSummary(trait: ReturnType<typeof getTrait>, weapon?: EffectiveWeapon) {
   const parts: string[] = [];
+  if (trait.weaponAffinity) parts.push(trait.weaponAffinity === 'melee' ? 'Melee only' : 'Ranged only');
   if (trait.damageConstant) parts.push(`Damage +${trait.damageConstant}`);
   if (trait.damageMultiplier) {
     const percent = Math.round((trait.damageMultiplier - 1) * 100);
@@ -26,6 +27,14 @@ export function getTraitEffectSummary(trait: ReturnType<typeof getTrait>, weapon
     parts.push(`Hit area +${percent}%${value}`);
   }
   if (trait.extraProjectiles) parts.push(`Projectiles +${trait.extraProjectiles}`);
+  if (trait.penetration) parts.push(`Penetration +${trait.penetration}`);
+  if (trait.follow) parts.push(`Follow ${trait.follow}`);
+  if (trait.ricochet) parts.push(`Ricochet +${trait.ricochet}`);
+  if (trait.meleeExtraHits) parts.push(`Multi-hit +${trait.meleeExtraHits}`);
+  if (trait.shockwaveRadiusMultiplier && trait.shockwaveDamageMultiplier) {
+    parts.push(`Shockwave ${Math.round(trait.shockwaveDamageMultiplier * 100)}% / ${Math.round(trait.shockwaveRadiusMultiplier * 100)}% radius`);
+  }
+  if (trait.aftershock) parts.push(`Aftershock x${trait.aftershock.count} at ${Math.round(trait.aftershock.damageMultiplier * 100)}%`);
   if (trait.lifeDrain) parts.push(`Life drain ${formatPercent(trait.lifeDrain)}`);
   if (trait.shield) parts.push(`Shield ${formatPercent(trait.shield)} for 10s`);
   if (trait.inflict) {

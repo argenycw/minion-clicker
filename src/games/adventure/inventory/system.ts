@@ -1,5 +1,6 @@
 import type { AdventureState, HandSlot } from '../state';
 import { getTrait, getWeapon } from '../content';
+import type { TraitDefinition } from '../content';
 import type { EffectiveWeapon } from './types';
 
 // Selectors
@@ -18,13 +19,23 @@ export function getEffectiveWeapon(state: Pick<AdventureState, 'inventory'>, wea
   const instance = state.inventory.weapons.find((weapon) => weapon.id === weaponInstanceId);
   if (!instance) throw new Error(`Unknown weapon instance: ${weaponInstanceId}`);
   const base = getWeapon(instance.baseWeaponId);
-  const traits = instance.traitIds.map(getTrait);
+  const traits = instance.traitIds.filter((traitId): traitId is string => traitId !== undefined).map(getTrait);
   const damageMultiplier = traits.reduce((value, trait) => value * (trait.damageMultiplier ?? 1), 1);
   const damageConstant = traits.reduce((value, trait) => value + (trait.damageConstant ?? 0), 0);
   const attackSpeedMultiplier = traits.reduce((value, trait) => value * (trait.attackSpeedMultiplier ?? 1), 1);
   const rangeMultiplier = traits.reduce((value, trait) => value * (trait.rangeMultiplier ?? 1), 1);
   const radiusMultiplier = traits.reduce((value, trait) => value * (trait.radiusMultiplier ?? 1), 1);
   const extraProjectiles = traits.reduce((value, trait) => value + (trait.extraProjectiles ?? 0), 0);
+  const penetration = traits.reduce((value, trait) => value + (trait.penetration ?? 0), 0);
+  const follow = traits.reduce((value, trait) => value + (trait.follow ?? 0), 0);
+  const ricochet = traits.reduce((value, trait) => value + (trait.ricochet ?? 0), 0);
+  const meleeExtraHits = traits.reduce((value, trait) => value + (trait.meleeExtraHits ?? 0), 0);
+  const shockwaveRadiusMultiplier = traits.reduce((value, trait) => Math.max(value, trait.shockwaveRadiusMultiplier ?? 0), 0);
+  const shockwaveDamageMultiplier = traits.reduce((value, trait) => Math.max(value, trait.shockwaveDamageMultiplier ?? 0), 0);
+  const aftershockCount = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.count ?? 0), 0);
+  const aftershockDamageMultiplier = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.damageMultiplier ?? 0), 0);
+  const aftershockDelayMs = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.delay ?? 0), 0);
+  const aftershockSpacingMultiplier = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.spacingMultiplier ?? 1), 1);
   const lifeDrain = traits.reduce((value, trait) => value + (trait.lifeDrain ?? 0), 0);
   const shield = traits.reduce((value, trait) => value + (trait.shield ?? 0), 0);
   const inflictions = traits.flatMap((trait) => trait.inflict ? [{
@@ -47,6 +58,16 @@ export function getEffectiveWeapon(state: Pick<AdventureState, 'inventory'>, wea
     range: Math.ceil(base.range * rangeMultiplier),
     radius: Math.ceil(base.radius * radiusMultiplier),
     projectileCount: base.kind === 'projectile' ? 1 + extraProjectiles : 1,
+    penetration: base.kind === 'projectile' ? penetration : 0,
+    follow: base.kind === 'projectile' ? follow : 0,
+    ricochet: base.kind === 'projectile' ? ricochet : 0,
+    meleeExtraHits: base.kind === 'melee' ? meleeExtraHits : 0,
+    shockwaveRadiusMultiplier: base.kind === 'melee' ? shockwaveRadiusMultiplier : 0,
+    shockwaveDamageMultiplier: base.kind === 'melee' ? shockwaveDamageMultiplier : 0,
+    aftershockCount: base.kind === 'melee' ? aftershockCount : 0,
+    aftershockDamageMultiplier: base.kind === 'melee' ? aftershockDamageMultiplier : 0,
+    aftershockDelayMs: base.kind === 'melee' ? aftershockDelayMs : 0,
+    aftershockSpacingMultiplier: base.kind === 'melee' ? aftershockSpacingMultiplier : 1,
     lifeDrain,
     shield,
     inflictions,
@@ -81,17 +102,20 @@ export function equipWeaponByItemNo(state: AdventureState, hand: HandSlot, itemN
   return weapon ? equipWeapon(state, hand, weapon.id) : state;
 }
 
-export function applyTraitToWeapon(state: AdventureState, traitId: string, weaponInstanceId: string): AdventureState {
+export function applyTraitToWeapon(state: AdventureState, traitId: string, weaponInstanceId: string, slotIndex?: number): AdventureState {
   const trait = state.inventory.traits.find((item) => item.traitId === traitId && item.count > 0);
   if (!trait) return state;
   const target = state.inventory.weapons.find((weapon) => weapon.id === weaponInstanceId);
-  if (!target || target.traitIds.length >= 5) return state;
+  if (!target) return state;
+  if (!canApplyTraitToWeapon(getTrait(traitId), getWeapon(target.baseWeaponId).kind)) return state;
+  const targetSlot = slotIndex ?? getFirstOpenTraitSlot(target.traitIds);
+  if (targetSlot < 0 || targetSlot >= 5 || target.traitIds[targetSlot]) return state;
   return {
     ...state,
     inventory: {
       ...state.inventory,
       weapons: state.inventory.weapons.map((weapon) =>
-        weapon.id === weaponInstanceId ? { ...weapon, traitIds: [...weapon.traitIds, traitId] } : weapon,
+        weapon.id === weaponInstanceId ? { ...weapon, traitIds: setTraitSlot(weapon.traitIds, targetSlot, traitId) } : weapon,
       ),
       traits: state.inventory.traits
         .map((item) => item.traitId === traitId ? { ...item, count: item.count - 1 } : item)
@@ -100,10 +124,14 @@ export function applyTraitToWeapon(state: AdventureState, traitId: string, weapo
   };
 }
 
-export function applyTraitToWeaponByItemNo(state: AdventureState, traitItemNo: number, weaponItemNo: number): AdventureState {
+export function canApplyTraitToWeapon(trait: TraitDefinition, weaponKind: 'melee' | 'projectile') {
+  return trait.weaponAffinity === undefined || trait.weaponAffinity === weaponKind;
+}
+
+export function applyTraitToWeaponByItemNo(state: AdventureState, traitItemNo: number, weaponItemNo: number, slotIndex?: number): AdventureState {
   const trait = state.inventory.traits.find((item) => item.itemNo === traitItemNo);
   const weapon = getWeaponByItemNo(state, weaponItemNo);
-  return trait && weapon ? applyTraitToWeapon(state, trait.traitId, weapon.id) : state;
+  return trait && weapon ? applyTraitToWeapon(state, trait.traitId, weapon.id, slotIndex) : state;
 }
 
 export function usePotionByItemNo(state: AdventureState, itemNo: number, now: number): AdventureState {
@@ -162,11 +190,22 @@ export function removeTraitFromWeapon(state: AdventureState, weaponInstanceId: s
     inventory: {
       ...state.inventory,
       weapons: state.inventory.weapons.map((item) => item.id === weaponInstanceId
-        ? { ...item, traitIds: item.traitIds.filter((_, traitIndex) => traitIndex !== index) }
+        ? { ...item, traitIds: setTraitSlot(item.traitIds, index, undefined) }
         : item),
       traits: existingStack
         ? state.inventory.traits.map((item) => item.traitId === traitId ? { ...item, count: item.count + 1 } : item)
         : [...state.inventory.traits, { itemNo: Math.max(100, ...state.inventory.traits.map((item) => item.itemNo)) + 1, traitId, count: 1 }],
     },
   };
+}
+
+function getFirstOpenTraitSlot(traitIds: Array<string | undefined>) {
+  for (let index = 0; index < 5; index += 1) {
+    if (!traitIds[index]) return index;
+  }
+  return -1;
+}
+
+function setTraitSlot(traitIds: Array<string | undefined>, index: number, traitId: string | undefined) {
+  return Array.from({ length: 5 }, (_, slot) => (slot === index ? traitId : traitIds[slot]));
 }

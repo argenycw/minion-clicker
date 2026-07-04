@@ -1,5 +1,7 @@
 import { getTrait } from '../../content';
 import type { AdventureState } from '../../state';
+import { canApplyTraitToWeapon } from '../../inventory/system';
+import type { WeaponKind } from '../../weapons/types';
 import { StoneIcon } from './StoneIcon';
 import { getTraitEffectSummary } from './inventoryPresentation';
 
@@ -10,7 +12,7 @@ export function StonePicker({
   onClose,
 }: {
   state: AdventureState;
-  weapon: { name: string; traitIds: string[] };
+  weapon: { name: string; traitIds: Array<string | undefined>; kind: WeaponKind };
   onApplyTrait: (traitId: string) => void;
   onClose: () => void;
 }) {
@@ -23,8 +25,9 @@ export function StonePicker({
       <div className="stone-picker-grid">
         {state.inventory.traits.map((stack) => {
           const trait = getTrait(stack.traitId);
+          const compatible = canApplyTraitToWeapon(trait, weapon.kind);
           return (
-            <button key={stack.itemNo} type="button" onClick={() => onApplyTrait(trait.id)}>
+            <button key={stack.itemNo} type="button" disabled={!compatible} title={compatible ? undefined : `${trait.name} cannot be socketed into ${weapon.kind} weapons.`} onClick={() => onApplyTrait(trait.id)}>
               <StoneIcon trait={trait} size="picker" />
               <strong>{trait.name}</strong>
               <small>{getTraitEffectSummary(trait)}</small>
@@ -36,4 +39,3 @@ export function StonePicker({
     </div>
   );
 }
-

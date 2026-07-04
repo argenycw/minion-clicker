@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { getTrait } from '../../content';
 import { getEffectiveWeapon, type AdventureState, type HandSlot } from '../../state';
 import { getOutfit } from '../../outfits';
@@ -33,6 +34,7 @@ export function ItemInspector({
   onEquipOutfit,
   onDispose,
   traitPickerWeaponNo,
+  traitPickerSlotIndex,
   onOpenTraitPicker,
   onCloseTraitPicker,
 }: {
@@ -40,7 +42,7 @@ export function ItemInspector({
   selection: InventorySelection;
   onEquip: (hand: HandSlot, weaponInstanceId: string) => void;
   onUnequip: (hand: HandSlot) => void;
-  onApplyTrait: (traitId: string, weaponInstanceId: string) => void;
+  onApplyTrait: (traitId: string, weaponInstanceId: string, slotIndex?: number) => void;
   onRemoveTrait: (weaponInstanceId: string, index: number) => void;
   onUse: (itemNo: number) => void;
   onEquipItem: (itemNo: number, slot: number) => void;
@@ -48,9 +50,11 @@ export function ItemInspector({
   onEquipOutfit: (outfitId: string) => void;
   onDispose: (kind: InventoryItemKind, itemNo: number) => void;
   traitPickerWeaponNo: number | undefined;
-  onOpenTraitPicker: (weaponItemNo: number) => void;
+  traitPickerSlotIndex: number | undefined;
+  onOpenTraitPicker: (weaponItemNo: number, slotIndex: number) => void;
   onCloseTraitPicker: () => void;
 }) {
+  const [selectedTraitSlotIndex, setSelectedTraitSlotIndex] = useState<number>();
 
   if (selection.kind === 'skill') {
     const skill = getSkill(selection.skillId);
@@ -118,6 +122,9 @@ export function ItemInspector({
     const weapon = state.inventory.weapons.find((item) => item.itemNo === selection.itemNo);
     if (!weapon) return null;
     const effective = getEffectiveWeapon(state, weapon.id);
+    const activeSlotIndex = selectedTraitSlotIndex ?? traitPickerSlotIndex;
+    const selectedTraitId = activeSlotIndex === undefined ? undefined : weapon.traitIds[activeSlotIndex];
+    const selectedTrait = selectedTraitId ? getTrait(selectedTraitId) : undefined;
     return (
       <section className="item-inspector">
         <InspectorHeader icon={effective.projectile?.glyph ?? effective.handGlyph} color={ITEM_RANK_COLORS[effective.rank]} name={weapon.name} itemNo={weapon.itemNo} />
@@ -128,23 +135,37 @@ export function ItemInspector({
               const trait = traitId ? getTrait(traitId) : undefined;
               return (
                 <button
-                  className={trait ? 'stone-socket filled' : 'stone-socket'}
+                  className={`${trait ? 'stone-socket filled' : 'stone-socket'}${activeSlotIndex === index ? ' selected' : ''}`}
                   key={index}
                   type="button"
-                  onClick={() => (trait ? onRemoveTrait(weapon.id, index) : onOpenTraitPicker(weapon.itemNo))}
+                  onClick={() => {
+                    setSelectedTraitSlotIndex(index);
+                    if (trait) {
+                      onCloseTraitPicker();
+                    } else {
+                      onOpenTraitPicker(weapon.itemNo, index);
+                    }
+                  }}
                   title={trait?.description ?? 'Open trait slot'}
                 >
                   {trait && <StoneIcon trait={trait} size="socket" />}
-                  {trait && (
-                    <span className="socket-tooltip">
-                      <strong>{trait.name}</strong>
-                      <small>{getTraitEffectSummary(trait, effective)}</small>
-                    </span>
-                  )}
                 </button>
               );
             })}
           </div>
+          {selectedTrait && activeSlotIndex !== undefined && (
+            <div className="socket-detail">
+              <StoneIcon trait={selectedTrait} size="picker" />
+              <div>
+                <strong>{selectedTrait.name}</strong>
+                <small>{getTraitEffectSummary(selectedTrait, effective)}</small>
+              </div>
+              <button type="button" onClick={() => {
+                onRemoveTrait(weapon.id, activeSlotIndex);
+                setSelectedTraitSlotIndex(undefined);
+              }}>Remove</button>
+            </div>
+          )}
           <p>{effective.description}</p>
           <div className="attribute-list">
             <AttributeRow icon="⚔️" label="Damage" value={effective.baseDamage} bonus={effective.damage - effective.baseDamage} />
@@ -158,13 +179,14 @@ export function ItemInspector({
             <AttributeRow icon="💥" label="Radius" value={effective.baseRadius} bonus={effective.radius - effective.baseRadius} />
           </div>
         </div>
-        {traitPickerWeaponNo === weapon.itemNo && (
+        {traitPickerWeaponNo === weapon.itemNo && traitPickerSlotIndex !== undefined && (
           <StonePicker
             state={state}
-            weapon={weapon}
+            weapon={{ ...weapon, kind: effective.kind }}
             onApplyTrait={(traitId) => {
-              onApplyTrait(traitId, weapon.id);
+              onApplyTrait(traitId, weapon.id, traitPickerSlotIndex);
               onCloseTraitPicker();
+              setSelectedTraitSlotIndex(traitPickerSlotIndex);
             }}
             onClose={onCloseTraitPicker}
           />

@@ -20,6 +20,7 @@ export function useAdventureMenus() {
   const [selectedItem, setSelectedItem] = useState<InventorySelection | undefined>({ kind: 'weapon', itemNo: 2 });
   const [selectedCraftItemId, setSelectedCraftItemId] = useState<string>();
   const [traitPickerWeaponNo, setTraitPickerWeaponNo] = useState<number>();
+  const [traitPickerSlotIndex, setTraitPickerSlotIndex] = useState<number>();
   const [activeShopId, setActiveShopId] = useState<ShopId>();
 
   return {
@@ -46,8 +47,15 @@ export function useAdventureMenus() {
     selectedCraftItemId,
     selectCraftItem: setSelectedCraftItemId,
     traitPickerWeaponNo,
-    openTraitPicker: setTraitPickerWeaponNo,
-    closeTraitPicker: () => setTraitPickerWeaponNo(undefined),
+    traitPickerSlotIndex,
+    openTraitPicker: (weaponItemNo: number, slotIndex: number) => {
+      setTraitPickerWeaponNo(weaponItemNo);
+      setTraitPickerSlotIndex(slotIndex);
+    },
+    closeTraitPicker: () => {
+      setTraitPickerWeaponNo(undefined);
+      setTraitPickerSlotIndex(undefined);
+    },
   };
 }
 

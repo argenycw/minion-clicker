@@ -2621,6 +2621,7 @@ body,
   display: flex;
   gap: 9px;
   align-items: center;
+  padding: 2px;
 }
 
 .trait-slots.single {
@@ -2642,6 +2643,17 @@ body,
   font-size: 1.15rem;
   font-weight: 900;
   cursor: pointer;
+  transition: transform 140ms ease, filter 140ms ease, border-color 140ms ease;
+}
+
+.stone-socket:hover,
+.stone-socket:focus-visible {
+  transform: scale(1.08);
+}
+
+.stone-socket.selected {
+  border-color: rgba(23, 32, 51, 0.34);
+  filter: none;
 }
 
 .stone-socket.filled {
@@ -2650,6 +2662,10 @@ body,
   border-color: transparent;
   background: transparent;
   color: inherit;
+}
+
+.stone-socket.filled.selected {
+  filter: drop-shadow(0 4px 10px rgba(114, 84, 186, 0.24));
 }
 
 .stone-icon {
@@ -2710,37 +2726,33 @@ body,
   font-size: 1.15rem;
 }
 
-.socket-tooltip {
-  position: absolute;
-  bottom: 58px;
-  left: 50%;
-  z-index: 30;
-  display: none;
-  width: 210px;
-  transform: translateX(-50%);
-  gap: 4px;
-  padding: 9px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  border-radius: 8px;
-  background: rgba(255, 250, 240, 0.98);
-  box-shadow: 0 10px 24px rgba(35, 30, 22, 0.26);
-  text-align: left;
-}
-
-.stone-socket:hover .socket-tooltip,
-.stone-socket:focus-visible .socket-tooltip {
+.socket-detail {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0 2px;
 }
 
-.socket-tooltip strong,
-.socket-tooltip small {
+.socket-detail strong,
+.socket-detail small {
   display: block;
 }
 
-.socket-tooltip small {
+.socket-detail small {
   color: #687282;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.socket-detail button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: #172033;
+  color: #fff8eb;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .stone-picker {
@@ -2804,6 +2816,12 @@ body,
   background: rgba(255, 255, 255, 0.68);
   color: #172033;
   cursor: pointer;
+}
+
+.stone-picker-grid button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.85);
+  opacity: 0.42;
 }
 
 .stone-picker-grid strong,
@@ -3437,7 +3455,7 @@ p {
 }
 
 .adventure-fps-counter {
-  bottom: 62px;
+  bottom: 70px;
 }
 
 

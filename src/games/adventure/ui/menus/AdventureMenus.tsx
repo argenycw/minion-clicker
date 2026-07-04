@@ -19,7 +19,7 @@ export type AdventureMenuActions = {
   equipSkill: (skillId: string, slot: number) => void;
   equipWeapon: (hand: HandSlot, weaponInstanceId: string) => void;
   unequipWeapon: (hand: HandSlot) => void;
-  applyTrait: (traitId: string, weaponInstanceId: string) => void;
+  applyTrait: (traitId: string, weaponInstanceId: string, slotIndex?: number) => void;
   removeTrait: (weaponInstanceId: string, index: number) => void;
   usePotion: (itemNo: number) => void;
   craftItem: (itemId: string, selections?: CraftingIngredientSelection[]) => void;
@@ -70,6 +70,7 @@ export function AdventureMenus({ state, menus, actions, graphics, onGraphicsChan
             menus.closeTraitPicker();
           }}
           traitPickerWeaponNo={menus.traitPickerWeaponNo}
+          traitPickerSlotIndex={menus.traitPickerSlotIndex}
           onOpenTraitPicker={menus.openTraitPicker}
           onCloseTraitPicker={menus.closeTraitPicker}
         />

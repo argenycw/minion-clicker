@@ -24,7 +24,7 @@ export type AdventureCommand =
   | { type: 'equipOutfit'; playerId: AdventurePlayerId; tick: number; outfitId: string }
   | { type: 'equipWeapon'; playerId: AdventurePlayerId; tick: number; hand: HandSlot; weaponInstanceId: string }
   | { type: 'unequipWeapon'; playerId: AdventurePlayerId; tick: number; hand: HandSlot }
-  | { type: 'applyTrait'; playerId: AdventurePlayerId; tick: number; traitId: string; weaponInstanceId: string }
+  | { type: 'applyTrait'; playerId: AdventurePlayerId; tick: number; traitId: string; weaponInstanceId: string; slotIndex?: number }
   | { type: 'removeTrait'; playerId: AdventurePlayerId; tick: number; weaponInstanceId: string; index: number }
   | { type: 'usePotion'; playerId: AdventurePlayerId; tick: number; itemNo: number }
   | { type: 'craftItem'; playerId: AdventurePlayerId; tick: number; itemId: string; selections?: CraftingIngredientSelection[] }
