@@ -2,6 +2,7 @@ import traitsJson from './traits.json';
 import type { ItemRank } from './loot';
 import type { StatusEffectId } from './status-effects/types';
 import { getStatusEffectDefinition } from './status-effects/definitions';
+import { combatBehaviorDefinitions, getCombatBehaviorDefinition, isCombatBehaviorId, type CombatBehaviorId } from './combat/behaviorRegistry';
 export { getWeapon, weaponDefinitions } from './weapons/definitions';
 export type { WeaponDefinition, WeaponKind } from './weapons/types';
 
@@ -39,6 +40,12 @@ export type TraitDefinition = {
     chance?: number;
     time?: number;
   };
+  behaviors: TraitBehaviorReference[];
+};
+
+export type TraitBehaviorReference = {
+  id: CombatBehaviorId;
+  params?: Record<string, number | string | undefined>;
 };
 
 export const traitDefinitions: TraitDefinition[] = (traitsJson as TraitDefinition[]).map(validateTrait);
@@ -66,6 +73,7 @@ function validateTrait(input: unknown): TraitDefinition {
       throw new Error(`Trait ${trait.id} inflict time must be positive.`);
     }
   }
+  const behaviors = trait.behaviors ? trait.behaviors.map(validateTraitBehaviorReference) : inferTraitBehaviorReferences(trait);
   return {
     id: trait.id,
     name: trait.name,
@@ -91,7 +99,82 @@ function validateTrait(input: unknown): TraitDefinition {
     lifeDrain: trait.lifeDrain,
     shield: trait.shield,
     inflict: trait.inflict ? { ...trait.inflict } : undefined,
+    behaviors,
   };
+}
+
+function validateTraitBehaviorReference(input: unknown): TraitBehaviorReference {
+  const reference = input as Partial<TraitBehaviorReference>;
+  if (!isCombatBehaviorId(reference.id)) throw new Error(`Trait behavior requires a valid stable behavior id.`);
+  const definition = getCombatBehaviorDefinition(reference.id);
+  validateBehaviorParams(definition.kind, reference.params);
+  return {
+    id: reference.id,
+    params: reference.params ? { ...reference.params } : undefined,
+  };
+}
+
+function validateBehaviorParams(kind: string, params: TraitBehaviorReference['params']) {
+  if (!params) return;
+  const definition = getCombatBehaviorDefinitionByKind(kind);
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    if (!definition.params.includes(key)) throw new Error(`${kind} does not support param ${key}.`);
+    if (key === 'statusId') {
+      if (typeof value !== 'string') throw new Error(`${kind} statusId must be a string.`);
+      getStatusEffectDefinition(value as StatusEffectId);
+      continue;
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${kind} ${key} must be a finite number.`);
+  }
+}
+
+function getCombatBehaviorDefinitionByKind(kind: string) {
+  const behavior = combatBehaviorDefinitions.find((definition) => definition.kind === kind);
+  if (!behavior) throw new Error(`Unknown behavior kind: ${kind}`);
+  return behavior;
+}
+
+function inferTraitBehaviorReferences(trait: Partial<TraitDefinition>): TraitBehaviorReference[] {
+  const behaviors: TraitBehaviorReference[] = [];
+  if (trait.extraProjectiles) behaviors.push({ id: 'behavior-001', params: { extraProjectiles: trait.extraProjectiles } });
+  if (trait.penetration) behaviors.push({ id: 'behavior-002', params: { count: trait.penetration } });
+  if (trait.follow) behaviors.push({ id: 'behavior-003', params: { strength: trait.follow } });
+  if (trait.ricochet) behaviors.push({ id: 'behavior-004', params: { count: trait.ricochet } });
+  if (trait.meleeExtraHits) behaviors.push({ id: 'behavior-005', params: { extraHits: trait.meleeExtraHits } });
+  if (trait.shockwaveRadiusMultiplier || trait.shockwaveDamageMultiplier) {
+    behaviors.push({
+      id: 'behavior-006',
+      params: {
+        radiusMultiplier: trait.shockwaveRadiusMultiplier,
+        damageMultiplier: trait.shockwaveDamageMultiplier,
+      },
+    });
+  }
+  if (trait.aftershock) {
+    behaviors.push({
+      id: 'behavior-007',
+      params: {
+        count: trait.aftershock.count,
+        damageMultiplier: trait.aftershock.damageMultiplier,
+        delay: trait.aftershock.delay,
+        spacingMultiplier: trait.aftershock.spacingMultiplier,
+      },
+    });
+  }
+  if (trait.lifeDrain) behaviors.push({ id: 'behavior-008', params: { ratio: trait.lifeDrain } });
+  if (trait.shield) behaviors.push({ id: 'behavior-009', params: { ratio: trait.shield } });
+  if (trait.inflict) {
+    behaviors.push({
+      id: 'behavior-010',
+      params: {
+        statusId: trait.inflict.id,
+        chance: trait.inflict.chance,
+        time: trait.inflict.time,
+      },
+    });
+  }
+  return behaviors;
 }
 
 function isItemRank(value: unknown): value is ItemRank {

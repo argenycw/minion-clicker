@@ -1,4 +1,4 @@
-import { Crosshair, HeartPulse, Swords } from 'lucide-react';
+import { Crosshair, HeartPulse, Swords, Workflow } from 'lucide-react';
 import { getOutfit } from '../../outfits';
 import { getPassiveSkillModifiers, getSkill } from '../../skills';
 import { getEquippedWeapon, PLAYER_MOVE_SPEED, type AdventureState, type EffectiveWeapon } from '../../state';
@@ -53,6 +53,16 @@ export function AdventureStatusHud({ state, now }: { state: AdventureState; now:
   );
 }
 
+export function AdventureDungeonDepthHud({ state }: { state: AdventureState }) {
+  if (!state.dungeon) return null;
+  return (
+    <div className="adventure-depth-hud" aria-label="Dungeon depth">
+      <Workflow size={28} strokeWidth={2.8} />
+      <strong>{state.dungeon.depth} / {state.dungeon.totalDepth}</strong>
+    </div>
+  );
+}
+
 export function AdventureCombatTargetPanel({ state, now }: { state: AdventureState; now: number }) {
   const target = getCombatTarget(state);
   return target ? <CombatTargetPanel target={target} now={now} /> : null;
@@ -74,7 +84,7 @@ export function getCharacterStatus(leftWeapon: EffectiveWeapon | undefined, righ
     stiffness: `${Math.round(state.player.stiffness)}%`,
     speed: Math.round((PLAYER_MOVE_SPEED + (outfit.speedBonus ?? 0) + skills.moveSpeed + activeHaste) * skills.moveSpeedMultiplier),
     rate: formatStatBonus(weapons.reduce((value, weapon) => value + weapon.attackSpeed, 0)),
-    range: weapons.length ? Math.max(...weapons.map((weapon) => weapon.range)) : 0,
+    range: weapons.length ? Math.round(Math.max(...weapons.map((weapon) => weapon.range)) * skills.rangeMultiplier) : 0,
     radius: weapons.length ? Math.max(...weapons.map((weapon) => weapon.radius)) : 0,
   };
 }

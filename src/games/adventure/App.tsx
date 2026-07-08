@@ -32,7 +32,7 @@ import { useAdventureMenus, type InventoryItemKind } from './ui/menus/useAdventu
 import { AdventureMenus } from './ui/menus/AdventureMenus';
 import { createAdventureMenuActions } from './ui/menus/menuActions';
 import { AdventureActionBars } from './ui/hud/ActionBars';
-import { AdventureCombatTargetPanel, AdventureStatusHud } from './ui/hud/StatusPanels';
+import { AdventureCombatTargetPanel, AdventureDungeonDepthHud, AdventureStatusHud } from './ui/hud/StatusPanels';
 import { AdventureAudioSystem } from './audio/system';
 import type { AdventureAudioCue, AdventureAudioPoint } from './audio/types';
 import { getWeaponAudio } from './weapons/definitions';
@@ -756,6 +756,7 @@ export function App() {
         />}
 
         <AdventureStatusHud state={state} now={now} />
+        <AdventureDungeonDepthHud state={state} />
 
         <div className="adventure-right-hud">
           <AdventureCombatTargetPanel state={state} now={now} />

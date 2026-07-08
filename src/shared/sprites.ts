@@ -1,4 +1,4 @@
-export type SpriteSheetId = 'sheet-01' | 'sheet-02' | 'sheet-03' | 'sheet-04' | 'sheet-05' | 'sheet-06' | 'sheet-07';
+export type SpriteSheetId = 'sheet-01' | 'sheet-02' | 'sheet-03' | 'sheet-04' | 'sheet-05' | 'sheet-06' | 'sheet-07' | 'sheet-08';
 
 export type SpriteRef = {
   sheetId: SpriteSheetId;
@@ -71,6 +71,13 @@ export const spriteSheets: Record<SpriteSheetId, SpriteSheetDefinition> = {
   'sheet-07': {
     id: 'sheet-07',
     src: '/assets/sprites/snowland.png',
+    columns: 16,
+    rows: 16,
+    cellSize: 64,
+  },
+  'sheet-08': {
+    id: 'sheet-08',
+    src: '/assets/sprites/dungeon.png',
     columns: 16,
     rows: 16,
     cellSize: 64,

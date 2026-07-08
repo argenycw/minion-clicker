@@ -4,6 +4,8 @@ import type { PassiveSkillModifiers, SkillNodeDefinition } from './types';
 
 // Selectors
 
+const BASE_PLAYER_MAX_HP = 140;
+
 const skillById = new Map(skillTreeDefinition.map((skill) => [skill.id, skill]));
 
 export function getSkill(skillId: string) {
@@ -55,11 +57,40 @@ export function getPassiveSkillModifiers(unlockedSkillIds: string[]): Required<P
     if (!passive) return total;
     return {
       maxHp: total.maxHp + (passive.maxHp ?? 0),
+      maxHpMultiplier: total.maxHpMultiplier * (passive.maxHpMultiplier ?? 1),
       moveSpeed: total.moveSpeed + (passive.moveSpeed ?? 0),
       moveSpeedMultiplier: total.moveSpeedMultiplier * (passive.moveSpeedMultiplier ?? 1),
+      attack: total.attack + (passive.attack ?? 0),
       damageMultiplier: total.damageMultiplier * (passive.damageMultiplier ?? 1),
+      rangeMultiplier: total.rangeMultiplier * (passive.rangeMultiplier ?? 1),
+      damageReduction: 1 - ((1 - total.damageReduction) * (1 - (passive.damageReduction ?? 0))),
+      lifeDrain: total.lifeDrain + (passive.lifeDrain ?? 0),
+      lowHpLifeDrainMax: Math.max(total.lowHpLifeDrainMax, passive.lowHpLifeDrainMax ?? 0),
+      hpRegenPerSecond: total.hpRegenPerSecond + (passive.hpRegenPerSecond ?? 0),
+      stiffness: total.stiffness + (passive.stiffness ?? 0),
+      maxHpDamageRatio: total.maxHpDamageRatio + (passive.maxHpDamageRatio ?? 0),
+      fullHpStatMultiplier: Math.max(total.fullHpStatMultiplier, passive.fullHpStatMultiplier ?? 1),
+      lowHpDamageMultiplier: total.lowHpDamageMultiplier * (passive.lowHpDamageMultiplier ?? 1),
+      highHpDamageMultiplier: total.highHpDamageMultiplier * (passive.highHpDamageMultiplier ?? 1),
     };
-  }, { maxHp: 0, moveSpeed: 0, moveSpeedMultiplier: 1, damageMultiplier: 1 });
+  }, {
+    maxHp: 0,
+    maxHpMultiplier: 1,
+    moveSpeed: 0,
+    moveSpeedMultiplier: 1,
+    attack: 0,
+    damageMultiplier: 1,
+    rangeMultiplier: 1,
+    damageReduction: 0,
+    lifeDrain: 0,
+    lowHpLifeDrainMax: 0,
+    hpRegenPerSecond: 0,
+    stiffness: 0,
+    maxHpDamageRatio: 0,
+    fullHpStatMultiplier: 1,
+    lowHpDamageMultiplier: 1,
+    highHpDamageMultiplier: 1,
+  });
 }
 
 export function getActiveHasteBonus(state: AdventureState) {
@@ -104,11 +135,19 @@ export function unlockSkill(state: AdventureState, skillId: string): AdventureSt
   const previousModifiers = getPassiveSkillModifiers(state.skills.unlockedIds);
   const unlockedIds = [...state.skills.unlockedIds, skillId];
   const nextModifiers = getPassiveSkillModifiers(unlockedIds);
-  const gainedMaxHp = nextModifiers.maxHp - previousModifiers.maxHp;
+  const previousMaxHp = Math.ceil((BASE_PLAYER_MAX_HP + previousModifiers.maxHp) * previousModifiers.maxHpMultiplier);
+  const nextMaxHp = Math.ceil((BASE_PLAYER_MAX_HP + nextModifiers.maxHp) * nextModifiers.maxHpMultiplier);
+  const gainedMaxHp = nextMaxHp - previousMaxHp;
+  const gainedStiffness = nextModifiers.stiffness - previousModifiers.stiffness;
   return {
     ...state,
-    player: gainedMaxHp > 0
-      ? { ...state.player, maxHp: state.player.maxHp + gainedMaxHp, hp: state.player.hp + gainedMaxHp }
+    player: gainedMaxHp > 0 || gainedStiffness !== 0
+      ? {
+        ...state.player,
+        maxHp: state.player.maxHp + gainedMaxHp,
+        hp: state.player.hp + Math.max(0, gainedMaxHp),
+        stiffness: state.player.stiffness + gainedStiffness,
+      }
       : state.player,
     skills: { ...state.skills, points: state.skills.points - skill.cost, unlockedIds },
   };

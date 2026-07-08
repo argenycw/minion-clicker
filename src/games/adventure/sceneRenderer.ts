@@ -11,6 +11,7 @@ import { getOutfit } from './outfits';
 import type { GraphicsSettings } from '../../shared/graphicsSettings';
 import { getAdventureItem, ITEM_RANK_COLORS, ITEM_RANK_EFFECT_COLORS } from './loot';
 import { getDungeonDefinition } from './dungeons/definitions';
+import { dungeonChestSprites, dungeonObjectiveSprites, getDungeonPropSprite } from './dungeons/sprites';
 import type { DungeonChest, DungeonProp, DungeonRect } from './dungeons/types';
 import type { TownNpcDefinition } from './towns/types';
 import type { WorldLocation } from './world/locations/types';
@@ -377,109 +378,106 @@ function drawDungeonMap(ctx: CanvasRenderingContext2D, dungeon: NonNullable<Adve
   const definition = getDungeonDefinition(dungeon.definitionId);
   ctx.fillStyle = definition.colors.void;
   ctx.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
-  for (const corridor of dungeon.corridors) drawDungeonRect(ctx, corridor, definition.colors.corridor, definition.colors.floorEdge);
-  for (const room of dungeon.rooms) drawDungeonRect(ctx, room, definition.colors.floor, definition.colors.floorEdge);
-
-  ctx.strokeStyle = definition.colors.grid;
-  ctx.lineWidth = 1;
-  for (const rect of dungeon.walkable) {
-    const firstX = Math.ceil(rect.x / GAME_SETTINGS.map.gridSize) * GAME_SETTINGS.map.gridSize;
-    const firstY = Math.ceil(rect.y / GAME_SETTINGS.map.gridSize) * GAME_SETTINGS.map.gridSize;
-    for (let x = firstX; x < rect.x + rect.width; x += GAME_SETTINGS.map.gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, rect.y);
-      ctx.lineTo(x, rect.y + rect.height);
-      ctx.stroke();
-    }
-    for (let y = firstY; y < rect.y + rect.height; y += GAME_SETTINGS.map.gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(rect.x, y);
-      ctx.lineTo(rect.x + rect.width, y);
-      ctx.stroke();
-    }
-  }
-  for (const prop of [...dungeon.props].sort((a, b) => a.y - b.y)) drawDungeonProp(ctx, prop);
-  drawDungeonExit(ctx, dungeon.exit.x, dungeon.exit.y, now);
-  for (const chest of dungeon.chests) drawDungeonChest(ctx, chest, now);
+  const bossDefeated = isDungeonBossDefeated(dungeon);
+  for (const corridor of dungeon.corridors) drawDungeonCorridorFill(ctx, corridor, definition.colors.corridor);
+  for (const room of dungeon.rooms) drawDungeonRoom(ctx, room, definition.colors.floor, definition.colors.floorEdge);
+  for (const corridor of dungeon.corridors) drawDungeonCorridorFill(ctx, corridor, definition.colors.corridor);
+  drawDungeonCorridorEdges(ctx, dungeon.corridors, dungeon.walkable, definition.colors.floorEdge);
+  [...dungeon.props].sort((a, b) => a.y - b.y).forEach((prop, index) => drawDungeonProp(ctx, prop, index));
+  if (dungeon.depth < dungeon.totalDepth || bossDefeated) drawDungeonExit(ctx, dungeon.exit.x, dungeon.exit.y, now);
+  if (dungeon.stairs) drawDungeonStairs(ctx, dungeon.stairs.x, dungeon.stairs.y, now);
+  for (const chest of dungeon.chests.filter((chest) => !chest.requiresBossDefeat || bossDefeated)) drawDungeonChest(ctx, chest, now);
 }
 
-function drawDungeonProp(ctx: CanvasRenderingContext2D, prop: DungeonProp) {
+function drawDungeonProp(ctx: CanvasRenderingContext2D, prop: DungeonProp, index: number) {
   ctx.save();
   ctx.translate(prop.x, prop.y);
-  ctx.rotate(prop.rotation);
-  ctx.scale(prop.scale, prop.scale);
-  ctx.fillStyle = 'rgba(27, 17, 10, 0.28)';
-  ctx.beginPath();
-  ctx.ellipse(0, 15, 28, 11, 0, 0, Math.PI * 2);
-  ctx.fill();
-  if (prop.kind === 'rock') {
-    ctx.fillStyle = '#756654';
-    ctx.strokeStyle = '#493d32';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-25, 10);
-    ctx.lineTo(-18, -12);
-    ctx.lineTo(2, -22);
-    ctx.lineTo(24, -9);
-    ctx.lineTo(28, 10);
-    ctx.lineTo(8, 20);
-    ctx.lineTo(-14, 18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = '#94836d';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-15, -8);
-    ctx.lineTo(2, -15);
-    ctx.lineTo(14, -7);
-    ctx.stroke();
-  } else if (prop.kind === 'stalagmite') {
-    ctx.fillStyle = '#6a5947';
-    ctx.strokeStyle = '#44372c';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-21, 17);
-    ctx.lineTo(-7, -10);
-    ctx.lineTo(0, -38);
-    ctx.lineTo(9, -8);
-    ctx.lineTo(23, 17);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = '#8b765f';
-    ctx.beginPath();
-    ctx.moveTo(0, -31);
-    ctx.lineTo(-2, 8);
-    ctx.stroke();
-  } else {
-    ctx.strokeStyle = '#d7c8a7';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-20, -10);
-    ctx.lineTo(20, 12);
-    ctx.moveTo(-18, 13);
-    ctx.lineTo(18, -12);
-    ctx.stroke();
-    ctx.fillStyle = '#e6d9ba';
-    for (const [x, y] of [[-22, -12], [22, 14], [-20, 15], [20, -14]] as const) {
-      ctx.beginPath();
-      ctx.arc(x, y, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  if (prop.flipX) ctx.scale(-1, 1);
+  const sprite = getDungeonPropSprite(prop.kind, index, prop.scale);
+  const size = getSpriteDrawSize(sprite);
+  drawSpriteRef(ctx, sprite, sprite.offsetX ?? 0, sprite.offsetY ?? 0, size.width, size.height);
+  ctx.restore();
+}
+
+function drawDungeonCorridorFill(ctx: CanvasRenderingContext2D, rect: DungeonRect, fill: string) {
+  ctx.fillStyle = fill;
+  ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+}
+
+function drawDungeonCorridorEdges(ctx: CanvasRenderingContext2D, corridors: DungeonRect[], walkable: DungeonRect[], edge: string) {
+  ctx.save();
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const corridor of corridors) {
+    drawExposedRectEdge(ctx, corridor, 'top', walkable);
+    drawExposedRectEdge(ctx, corridor, 'right', walkable);
+    drawExposedRectEdge(ctx, corridor, 'bottom', walkable);
+    drawExposedRectEdge(ctx, corridor, 'left', walkable);
   }
   ctx.restore();
 }
 
-function drawDungeonRect(ctx: CanvasRenderingContext2D, rect: DungeonRect, fill: string, edge: string) {
+function drawExposedRectEdge(ctx: CanvasRenderingContext2D, rect: DungeonRect, side: 'top' | 'right' | 'bottom' | 'left', walkable: DungeonRect[]) {
+  const horizontal = side === 'top' || side === 'bottom';
+  const start = horizontal ? rect.x : rect.y;
+  const end = horizontal ? rect.x + rect.width : rect.y + rect.height;
+  const lineCoordinate = side === 'top' ? rect.y : side === 'bottom' ? rect.y + rect.height : side === 'left' ? rect.x : rect.x + rect.width;
+  const outsideOffset = side === 'top' || side === 'left' ? -2 : 2;
+  const cuts = [start, end];
+  for (const other of walkable) {
+    const otherStart = horizontal ? other.x : other.y;
+    const otherEnd = horizontal ? other.x + other.width : other.y + other.height;
+    if (otherEnd > start && otherStart < end) {
+      cuts.push(Math.max(start, otherStart), Math.min(end, otherEnd));
+    }
+  }
+  cuts.sort((a, b) => a - b);
+  for (let index = 0; index < cuts.length - 1; index += 1) {
+    const segmentStart = cuts[index];
+    const segmentEnd = cuts[index + 1];
+    if (segmentEnd - segmentStart < 1) continue;
+    const midpoint = (segmentStart + segmentEnd) / 2;
+    const outsideX = horizontal ? midpoint : lineCoordinate + outsideOffset;
+    const outsideY = horizontal ? lineCoordinate + outsideOffset : midpoint;
+    if (isPointInsideAnyRect(outsideX, outsideY, walkable)) continue;
+    ctx.beginPath();
+    if (horizontal) {
+      ctx.moveTo(segmentStart, lineCoordinate);
+      ctx.lineTo(segmentEnd, lineCoordinate);
+    } else {
+      ctx.moveTo(lineCoordinate, segmentStart);
+      ctx.lineTo(lineCoordinate, segmentEnd);
+    }
+    ctx.stroke();
+  }
+}
+
+function isPointInsideAnyRect(x: number, y: number, rects: DungeonRect[]) {
+  return rects.some((rect) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height);
+}
+
+function drawDungeonRoom(ctx: CanvasRenderingContext2D, room: NonNullable<AdventureState['dungeon']>['rooms'][number], fill: string, edge: string) {
+  ctx.save();
   ctx.fillStyle = fill;
   ctx.strokeStyle = edge;
   ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 28);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  drawPolygonPath(ctx, room.footprint);
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawPolygonPath(ctx: CanvasRenderingContext2D, points: Array<{ x: number; y: number }>) {
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.closePath();
 }
 
 function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocation, now: number, mapSprites: boolean) {
@@ -564,57 +562,73 @@ function drawWorldLocation(ctx: CanvasRenderingContext2D, location: WorldLocatio
 function drawDungeonExit(ctx: CanvasRenderingContext2D, x: number, y: number, now: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = '#a9d9df';
-  ctx.lineWidth = 5;
-  ctx.globalAlpha = 0.75 + Math.sin(now / 260) * 0.18;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 44, 23, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(126, 210, 221, 0.22)';
-  ctx.fill();
+  const sprite = dungeonObjectiveSprites.exit;
+  const size = getSpriteDrawSize(sprite);
+  const drewSprite = drawSpriteRef(ctx, sprite, 0, 0, size.width, size.height);
+  if (!drewSprite) {
+    ctx.globalAlpha = 0.75 + Math.sin(now / 260) * 0.18;
+    ctx.fillStyle = 'rgba(126, 210, 221, 0.22)';
+    ctx.strokeStyle = '#a9d9df';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 44, 23, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#d8f3f5';
-  ctx.font = '800 16px "Segoe UI", sans-serif';
+  ctx.font = '900 16px "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('EXIT', 0, 5);
+  ctx.fillText('Exit', 0, drewSprite ? -86 : 5);
   ctx.restore();
+}
+
+function drawDungeonStairs(ctx: CanvasRenderingContext2D, x: number, y: number, now: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  const sprite = dungeonObjectiveSprites.stairs;
+  const size = getSpriteDrawSize(sprite);
+  const drewSprite = drawSpriteRef(ctx, sprite, 0, 0, size.width, size.height);
+  if (!drewSprite) {
+    ctx.fillStyle = 'rgba(8, 10, 12, 0.34)';
+    ctx.beginPath();
+    ctx.ellipse(0, 24, 52, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#d4b16c';
+    ctx.lineWidth = 5;
+    ctx.globalAlpha = 0.72 + Math.sin(now / 280) * 0.16;
+    for (let index = 0; index < 5; index += 1) {
+      const width = 76 - index * 11;
+      const yOffset = 24 - index * 13;
+      ctx.beginPath();
+      ctx.moveTo(-width / 2, yOffset);
+      ctx.lineTo(width / 2, yOffset);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#f5df9a';
+  ctx.font = '900 16px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Next Floor', 0, -86);
+  ctx.restore();
+}
+
+function isDungeonBossDefeated(dungeon: NonNullable<AdventureState['dungeon']>) {
+  return !dungeon.bossEnemyId || !dungeon.enemies.some((enemy) => enemy.id === dungeon.bossEnemyId && enemy.hp > 0);
 }
 
 function drawDungeonChest(ctx: CanvasRenderingContext2D, chest: DungeonChest, now: number) {
   ctx.save();
   ctx.translate(chest.x, chest.y);
-  ctx.fillStyle = 'rgba(10, 12, 12, 0.32)';
-  ctx.beginPath();
-  ctx.ellipse(0, 22, 36, 11, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#51351e';
-  ctx.lineWidth = 4;
-  ctx.fillStyle = chest.opened ? '#74604c' : '#a66a2e';
-  ctx.beginPath();
-  ctx.roundRect(-34, chest.opened ? -4 : -18, 68, 40, 8);
-  ctx.fill();
-  ctx.stroke();
-  if (!chest.opened) {
-    ctx.fillStyle = '#c98939';
-    ctx.beginPath();
-    ctx.roundRect(-34, -28, 68, 22, [12, 12, 4, 4]);
-    ctx.fill();
-    ctx.stroke();
-  } else {
-    ctx.save();
-    ctx.translate(0, -18);
-    ctx.rotate(-0.42);
-    ctx.fillStyle = '#80613f';
-    ctx.fillRect(-34, -8, 68, 16);
-    ctx.restore();
-  }
-  ctx.fillStyle = '#e6c45c';
-  ctx.fillRect(-5, chest.opened ? 1 : -13, 10, 15);
+  const sprite = chest.opened ? dungeonChestSprites.opened : dungeonChestSprites.closed;
+  const size = getSpriteDrawSize(sprite);
+  drawSpriteRef(ctx, sprite, 0, 0, size.width, size.height);
   if (!chest.opened) {
     ctx.globalAlpha = 0.5 + Math.sin(now / 300) * 0.2;
     ctx.strokeStyle = '#f4dc86';
     ctx.lineWidth = 2;
-    ctx.strokeRect(-40, -34, 80, 64);
+    ctx.strokeRect(-44, -40, 88, 76);
   }
   ctx.restore();
 }

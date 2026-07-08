@@ -38,6 +38,8 @@ export const adventureAudioClips: AdventureAudioClipDefinition[] = [
   { id: 'sfx-melee-01', name: 'Melee attack 01 (default)', file: 'attack-melee-01.mp3', source: 'All Battle SFX / Video Game Combat / Punch' },
   { id: 'sfx-melee-02', name: 'Melee attack 02 (punch/kick)', file: 'attack-melee-02.mp3', source: 'All Battle SFX / Video Game Combat / Kick' },
   { id: 'sfx-melee-03', name: 'Melee attack 03 (punch/kick)', file: 'attack-melee-03.mp3', source: 'All Battle SFX / Video Game Combat / Kick Two' },
+  { id: 'sfx-melee-swing-01', name: 'Melee attack 04 (swing)', file: 'attack-melee-swing-01.mp3', source: 'Elevenlabs' },
+  { id: 'sfx-melee-swing-02', name: 'Melee attack 05 (swing)', file: 'attack-melee-swing-02.mp3', source: 'Elevenlabs' },
 
   { id: 'sfx-ranged-01', name: 'Ranged attack 01 (default)', file: 'attack-ranged-01.mp3', source: 'All Battle SFX / Weapons / Quickie Whoosh' },
 
@@ -68,7 +70,7 @@ export const adventureAudioCues = {
   'attack-ranged': { clipId: 'sfx-ranged-01', volume: 0.34, minIntervalMs: 55 },
   'weapon-bare-fist-use': { clipId: 'sfx-melee-01', volume: 0.36, minIntervalMs: 45 },
   'weapon-punch-use': { clipId: 'sfx-melee-02', volume: 0.42, minIntervalMs: 45 },
-  'weapon-claw-use': { clipId: 'sfx-melee-01', volume: 0.38, minIntervalMs: 45, rate: [1.04, 1.16] },
+  'weapon-claw-use': { clipId: 'sfx-melee-swing-01', volume: 0.38, minIntervalMs: 45, rate: [1.04, 1.16] },
   'weapon-spark-use': { clipId: 'sfx-ranged-01', volume: 0.34, minIntervalMs: 55 },
   'weapon-spark-hit': { clipId: 'sfx-ranged-hit-01', volume: 0.42, minIntervalMs: 45 },
   'weapon-heart-tether-use': { clipId: 'sfx-ranged-01', volume: 0.28, minIntervalMs: 80, rate: [0.82, 0.96] },

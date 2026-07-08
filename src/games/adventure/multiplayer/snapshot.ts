@@ -36,8 +36,9 @@ export function rebaseAdventureSnapshotClock(snapshot: AdventureState, receivedA
     },
     death: snapshot.death ? rebaseDeath(snapshot.death, clockOffset) : undefined,
     players,
-    pendingMeleeAttacks: snapshot.pendingMeleeAttacks.map((attack) => ({ ...attack, releasesAt: attack.releasesAt + clockOffset })),
-    pendingCircleAttacks: snapshot.pendingCircleAttacks.map((attack) => ({ ...attack, born: attack.born + clockOffset, endsAt: attack.endsAt + clockOffset })),
+    pendingAttacks: snapshot.pendingAttacks.map((attack) => attack.kind === 'melee-area'
+      ? { ...attack, releasesAt: attack.releasesAt + clockOffset }
+      : { ...attack, born: attack.born + clockOffset, endsAt: attack.endsAt + clockOffset }),
     enemies: snapshot.enemies.map((enemy) => ({
       ...enemy,
       knockbackMotion: rebaseKnockbackMotion(enemy.knockbackMotion, clockOffset),

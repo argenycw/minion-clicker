@@ -1,8 +1,20 @@
 export type PassiveSkillModifiers = {
   maxHp?: number;
+  maxHpMultiplier?: number;
   moveSpeed?: number;
   moveSpeedMultiplier?: number;
+  attack?: number;
   damageMultiplier?: number;
+  rangeMultiplier?: number;
+  damageReduction?: number;
+  lifeDrain?: number;
+  lowHpLifeDrainMax?: number;
+  hpRegenPerSecond?: number;
+  stiffness?: number;
+  maxHpDamageRatio?: number;
+  fullHpStatMultiplier?: number;
+  lowHpDamageMultiplier?: number;
+  highHpDamageMultiplier?: number;
 };
 
 export type ActiveSkillEffect =

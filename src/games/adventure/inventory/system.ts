@@ -2,6 +2,7 @@ import type { AdventureState, HandSlot } from '../state';
 import { getTrait, getWeapon } from '../content';
 import type { TraitDefinition } from '../content';
 import type { EffectiveWeapon } from './types';
+import type { StatusEffectId } from '../status-effects/types';
 
 // Selectors
 
@@ -25,24 +26,31 @@ export function getEffectiveWeapon(state: Pick<AdventureState, 'inventory'>, wea
   const attackSpeedMultiplier = traits.reduce((value, trait) => value * (trait.attackSpeedMultiplier ?? 1), 1);
   const rangeMultiplier = traits.reduce((value, trait) => value * (trait.rangeMultiplier ?? 1), 1);
   const radiusMultiplier = traits.reduce((value, trait) => value * (trait.radiusMultiplier ?? 1), 1);
-  const extraProjectiles = traits.reduce((value, trait) => value + (trait.extraProjectiles ?? 0), 0);
-  const penetration = traits.reduce((value, trait) => value + (trait.penetration ?? 0), 0);
-  const follow = traits.reduce((value, trait) => value + (trait.follow ?? 0), 0);
-  const ricochet = traits.reduce((value, trait) => value + (trait.ricochet ?? 0), 0);
-  const meleeExtraHits = traits.reduce((value, trait) => value + (trait.meleeExtraHits ?? 0), 0);
-  const shockwaveRadiusMultiplier = traits.reduce((value, trait) => Math.max(value, trait.shockwaveRadiusMultiplier ?? 0), 0);
-  const shockwaveDamageMultiplier = traits.reduce((value, trait) => Math.max(value, trait.shockwaveDamageMultiplier ?? 0), 0);
-  const aftershockCount = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.count ?? 0), 0);
-  const aftershockDamageMultiplier = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.damageMultiplier ?? 0), 0);
-  const aftershockDelayMs = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.delay ?? 0), 0);
-  const aftershockSpacingMultiplier = traits.reduce((value, trait) => Math.max(value, trait.aftershock?.spacingMultiplier ?? 1), 1);
-  const lifeDrain = traits.reduce((value, trait) => value + (trait.lifeDrain ?? 0), 0);
-  const shield = traits.reduce((value, trait) => value + (trait.shield ?? 0), 0);
-  const inflictions = traits.flatMap((trait) => trait.inflict ? [{
-    statusId: trait.inflict.id,
-    chance: trait.inflict.chance ?? 1,
-    durationMs: trait.inflict.time === undefined ? undefined : trait.inflict.time * 1000,
-  }] : []);
+  const behaviors = traits.flatMap((trait) => trait.behaviors);
+  const extraProjectiles = sumBehaviorNumber(behaviors, 'behavior-001', 'extraProjectiles');
+  const penetration = sumBehaviorNumber(behaviors, 'behavior-002', 'count');
+  const follow = sumBehaviorNumber(behaviors, 'behavior-003', 'strength');
+  const ricochet = sumBehaviorNumber(behaviors, 'behavior-004', 'count');
+  const meleeExtraHits = sumBehaviorNumber(behaviors, 'behavior-005', 'extraHits');
+  const shockwaveRadiusMultiplier = maxBehaviorNumber(behaviors, 'behavior-006', 'radiusMultiplier');
+  const shockwaveDamageMultiplier = maxBehaviorNumber(behaviors, 'behavior-006', 'damageMultiplier');
+  const aftershockCount = maxBehaviorNumber(behaviors, 'behavior-007', 'count');
+  const aftershockDamageMultiplier = maxBehaviorNumber(behaviors, 'behavior-007', 'damageMultiplier');
+  const aftershockDelayMs = maxBehaviorNumber(behaviors, 'behavior-007', 'delay');
+  const aftershockSpacingMultiplier = Math.max(1, maxBehaviorNumber(behaviors, 'behavior-007', 'spacingMultiplier'));
+  const lifeDrain = sumBehaviorNumber(behaviors, 'behavior-008', 'ratio');
+  const shield = sumBehaviorNumber(behaviors, 'behavior-009', 'ratio');
+  const inflictions = behaviors
+    .filter((behavior) => behavior.id === 'behavior-010')
+    .flatMap((behavior) => {
+      const statusId = behavior.params?.statusId;
+      if (typeof statusId !== 'string') return [];
+      return [{
+        statusId: statusId as StatusEffectId,
+        chance: getBehaviorNumber(behavior, 'chance') ?? 1,
+        durationMs: getBehaviorNumber(behavior, 'time') === undefined ? undefined : getBehaviorNumber(behavior, 'time')! * 1000,
+      }];
+    });
   return {
     ...base,
     instanceId: instance.id,
@@ -208,4 +216,19 @@ function getFirstOpenTraitSlot(traitIds: Array<string | undefined>) {
 
 function setTraitSlot(traitIds: Array<string | undefined>, index: number, traitId: string | undefined) {
   return Array.from({ length: 5 }, (_, slot) => (slot === index ? traitId : traitIds[slot]));
+}
+
+type TraitBehaviorReference = TraitDefinition['behaviors'][number];
+
+function getBehaviorNumber(behavior: TraitBehaviorReference, key: string) {
+  const value = behavior.params?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function sumBehaviorNumber(behaviors: TraitBehaviorReference[], behaviorId: TraitBehaviorReference['id'], key: string) {
+  return behaviors.reduce((value, behavior) => behavior.id === behaviorId ? value + (getBehaviorNumber(behavior, key) ?? 0) : value, 0);
+}
+
+function maxBehaviorNumber(behaviors: TraitBehaviorReference[], behaviorId: TraitBehaviorReference['id'], key: string) {
+  return behaviors.reduce((value, behavior) => behavior.id === behaviorId ? Math.max(value, getBehaviorNumber(behavior, key) ?? 0) : value, 0);
 }

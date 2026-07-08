@@ -5,11 +5,13 @@ export const dungeonDefinitions: Record<DungeonId, DungeonDefinition> = {
     id: 'dungeon-01',
     kind: 'cave',
     name: 'Echoing Cave',
+    totalDepth: 10,
     roomCount: [6, 9],
     roomWidth: [760, 1040],
     roomHeight: [560, 760],
     enemiesPerRoom: [1, 3],
     enemyIds: ['minion-01', 'minion-02', 'minion-04', 'minion-09'],
+    bossEnemyId: 'minion-09',
     chestChance: 0.48,
     chestRolls: [2, 4],
     chestLoot: {

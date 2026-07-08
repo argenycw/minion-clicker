@@ -111,6 +111,7 @@ export function SkillTreePanel({
         </div>
         <div className="skill-tree-canvas" onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onWheel={zoomTree}>
           <div className="skill-tree-world" style={{ width: layout.width, height: layout.height, transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
+            <div className="skill-tree-grid" aria-hidden="true" />
             <svg className="skill-tree-links" width={layout.width} height={layout.height} aria-hidden="true">
               {skillTreeDefinition.flatMap((skill) => getSkillPrerequisites(skill).map((requiredId) => {
                 const from = layout.positions.get(requiredId)!;
@@ -136,9 +137,10 @@ export function SkillTreePanel({
               const isUnlocked = state.skills.unlockedIds.includes(skill.id);
               const available = areSkillPrerequisitesMet(state, skill.id);
               const assignedSlot = getAssignedSkillSlot(state, skill.id);
+              const displayKind = getSkillDisplayKind(skill);
               return <button
                 key={skill.id}
-                className={`skill-node ${skill.kind} ${isUnlocked ? 'unlocked' : available ? 'available' : 'locked'} ${selected.id === skill.id ? 'selected' : ''} ${holdingId === skill.id ? 'holding' : ''} ${completedId === skill.id ? 'completed' : ''} ${rejectedId === skill.id ? 'rejected' : ''}`}
+                className={`skill-node ${skill.kind} ${displayKind} ${isUnlocked ? 'unlocked' : available ? 'available' : 'locked'} ${selected.id === skill.id ? 'selected' : ''} ${holdingId === skill.id ? 'holding' : ''} ${completedId === skill.id ? 'completed' : ''} ${rejectedId === skill.id ? 'rejected' : ''}`}
                 style={{ '--skill-color': skill.color, left: position.x, top: position.y } as CSSProperties}
                 type="button"
                 onPointerDown={(event) => startNodeHold(event, skill)}
@@ -146,7 +148,7 @@ export function SkillTreePanel({
                 onPointerLeave={stopHold}
                 onPointerCancel={stopHold}
                 onContextMenu={(event) => event.preventDefault()}
-                aria-label={`${skill.name || 'Skill tree origin'}, ${skill.kind}, ${isUnlocked ? 'unlocked' : available ? 'available' : 'locked'}`}
+                aria-label={`${skill.name || 'Skill tree origin'}, ${getSkillKindLabel(skill)}, ${isUnlocked ? 'unlocked' : available ? 'available' : 'locked'}`}
               >
                 <span className="skill-node-core">
                   <span className="skill-node-fill" />
@@ -155,7 +157,7 @@ export function SkillTreePanel({
                 {!isUnlocked && !available && <span className="skill-lock-overlay"><Lock size={14} /></span>}
                 {assignedSlot && <span className="skill-slot-badge">{assignedSlot}</span>}
                 {skill.name && <strong>{skill.name}</strong>}
-                <small className="skill-kind-tooltip">{skill.kind}</small>
+                <small className="skill-kind-tooltip">{getSkillKindLabel(skill)}</small>
               </button>;
             })}
           </div>
@@ -166,6 +168,7 @@ export function SkillTreePanel({
         </div>
         <div className="skill-tree-legend">
           <span><i className="passive" /> Passive stat bonus</span>
+          <span><i className="strong-passive" /> Strong passive</span>
           <span><i className="active" /> Active hotbar skill</span>
           <span><i className="keystone" /> Keystone tradeoff</span>
         </div>
@@ -174,7 +177,7 @@ export function SkillTreePanel({
       <section className="skill-inspector">
         <div className="skill-inspector-header">
           <span style={{ color: selected.color }}>{selected.icon}</span>
-          <div><small>{selected.kind} skill</small>{selected.name && <h2>{selected.name}</h2>}</div>
+          <div><small>{getSkillKindLabel(selected)} skill</small>{selected.name && <h2>{selected.name}</h2>}</div>
           <em>{selected.cost} SP</em>
         </div>
         {selected.description && <p>{selected.description}</p>}
@@ -187,7 +190,7 @@ export function SkillTreePanel({
         {selectedPrerequisites.length > 0 && <p className="skill-requirement">Requires {selectedPrerequisites.map((skillId) => getSkill(skillId).name || 'Skill tree origin').join(' or ')}</p>}
         <div className="skill-inspector-actions">
           {!unlocked && <span className="skill-hold-hint">Press and hold the node to unlock</span>}
-          {unlocked && selected.kind !== 'active' && <span className="skill-unlocked-label">{selected.kind === 'keystone' ? 'Keystone active' : 'Passive active'}</span>}
+          {unlocked && selected.kind !== 'active' && <span className="skill-unlocked-label">{selected.kind === 'keystone' ? 'Keystone active' : isStrongPassive(selected) ? 'Strong passive active' : 'Passive active'}</span>}
           {unlocked && selected.kind === 'active' && <div className="skill-slot-actions">
             <span>Assign to shared hotbar</span>
             <div>{[1, 2, 3, 4, 5].map((slot) => {
@@ -200,6 +203,33 @@ export function SkillTreePanel({
       </section>
     </div>
   );
+}
+
+function getSkillDisplayKind(skill: SkillNodeDefinition) {
+  if (skill.kind === 'passive' && isStrongPassive(skill)) return 'strong-passive';
+  return skill.kind;
+}
+
+function getSkillKindLabel(skill: SkillNodeDefinition) {
+  if (skill.kind === 'passive' && isStrongPassive(skill)) return 'Strong Passive';
+  return skill.kind[0].toUpperCase() + skill.kind.slice(1);
+}
+
+function isStrongPassive(skill: SkillNodeDefinition) {
+  const passive = skill.passive;
+  if (!passive || skill.kind !== 'passive') return false;
+  return passive.maxHpMultiplier !== undefined
+    || passive.moveSpeedMultiplier !== undefined
+    || passive.rangeMultiplier !== undefined
+    || passive.damageReduction !== undefined
+    || passive.lifeDrain !== undefined
+    || passive.lowHpLifeDrainMax !== undefined
+    || passive.hpRegenPerSecond !== undefined
+    || passive.stiffness !== undefined
+    || passive.maxHpDamageRatio !== undefined
+    || passive.fullHpStatMultiplier !== undefined
+    || passive.lowHpDamageMultiplier !== undefined
+    || passive.highHpDamageMultiplier !== undefined;
 }
 
 function SkillPassiveDetails({ skill }: { skill: SkillNodeDefinition }) {
